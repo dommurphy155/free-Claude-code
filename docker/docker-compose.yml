@@ -1,0 +1,78 @@
+# =============================================================================
+# Claude Code Local - Docker Compose
+# Run anywhere with zero host dependencies
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # Main bridge service
+  claude-bridge:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: claude-code-haha:latest
+    container_name: claude-code-haha
+    ports:
+      - "8789:8789"
+    environment:
+      # Mode: 1 = restricted (no --ipc-host needed), 0 = full browser
+      - RESTRICTED_MODE=${RESTRICTED_MODE:-1}
+
+      # API Configuration - set these or use .env file
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:-local-bridge-mode}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-http://localhost:8789}
+
+      # Direct API mode (no keymaster needed) - set USE_DIRECT_API=1
+      - USE_DIRECT_API=${USE_DIRECT_API:-0}
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+
+      # Keymaster (if using local keymaster)
+      - KEYMASTER_URL=${KEYMASTER_URL:-http://host.docker.internal:8787}
+
+      # Features
+      - DISABLE_TELEMETRY=1
+      - CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+
+      # Telegram (optional)
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_ALLOWED_CHAT_IDS=${TELEGRAM_ALLOWED_CHAT_IDS:-}
+    volumes:
+      # Persist data
+      - claude-data:/tmp/claude-data
+      - claude-cache:/tmp/.cache
+      # Optional: mount your .env for easy config
+      - ./.env.docker:/app/.env:ro
+    # Uncomment for full browser mode (requires RESTRICTED_MODE=0)
+    # ipc: host
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8789/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Optional: Telegram bot as separate service
+  telegram-bot:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: claude-code-haha:latest
+    container_name: claude-telegram
+    command: telegram
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_ALLOWED_CHAT_IDS=${TELEGRAM_ALLOWED_CHAT_IDS:-}
+      - ANTHROPIC_AUTH_TOKEN=${ANTHROPIC_AUTH_TOKEN:-local-bridge-mode}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-http://claude-bridge:8789}
+    depends_on:
+      - claude-bridge
+    restart: unless-stopped
+    profiles: ["telegram"]  # Only start with: docker-compose --profile telegram up
+
+volumes:
+  claude-data:
+  claude-cache:

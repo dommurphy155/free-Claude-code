@@ -1,0 +1,29 @@
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Docker symlinks (actual files are in docker/ folder)
+docker-compose.yml
+docker_entrypoint.py
+docker_restricted_mode.py
+run-anywhere.sh
+
+# Backups
+*.backup.*
+
+# Dependencies
+node_modules
+__pycache__/
+
+# Claude local data
+.claude/
+.remember/
+!.remember/.gitkeep
+
+# OpenClaw (credentials and sensitive data)
+.openclaw/
+
+# Runtime files
+*.pid
+*.lock
