@@ -34,18 +34,18 @@ import httpx
 # Playwright imports
 from playwright.async_api import async_playwright, Page, Browser, BrowserContext
 
-# Lazy load duck.py - only import when needed
-duck = None
-def get_duck():
-    global duck
+# Lazy load searxng.py - only import when needed
+searxng = None
+def get_searxng():
+    global searxng
     try:
-        import duck as _duck
-        duck = _duck
-        print("[BRIDGE] duck.py lazy loaded", file=sys.stderr, flush=True)
+        import searxng as _searxng
+        searxng = _searxng
+        print("[BRIDGE] searxng.py lazy loaded", file=sys.stderr, flush=True)
     except ImportError as e:
-        print(f"[BRIDGE] ERROR: Failed to import duck: {e}", file=sys.stderr, flush=True)
-        duck = None
-    return duck
+        print(f"[BRIDGE] ERROR: Failed to import searxng: {e}", file=sys.stderr, flush=True)
+        searxng = None
+    return searxng
 
 # Browser state persistence
 import importlib.util
@@ -219,6 +219,19 @@ def get_api_config():
 
 WEB_TOOLS = [
     # Note: browser_task is now a native Claude Code tool (BrowserTaskTool), not injected here
+    {
+        "name": "web_search",
+        "description": "Search the web for current information. Returns search results with titles, URLs, and snippets.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "The search query"},
+                "depth": {"type": "string", "enum": ["fast", "standard", "deep"], "default": "standard"},
+                "num_results": {"type": "number", "default": 10}
+            },
+            "required": ["query"]
+        }
+    },
     {
         "name": "web_fetch",
         "description": "Fetch a single public webpage with RETRY LOGIC. Handles timeouts, 403s, 420s automatically. Returns text content.",
@@ -1374,9 +1387,9 @@ async def cdp_search_with_retry(
     retries: int = 3,
     num_results: int = 10,
     depth: str = "standard",
-    provider: str = "duckduckgo"
+    provider: str = "searxng"
 ) -> str:
-    """Search using provider-agnostic search engine with query expansion.
+    """Search using SearXNG meta-search engine with query expansion.
 
     Args:
         query: Search query
@@ -1384,15 +1397,15 @@ async def cdp_search_with_retry(
         retries: Number of retry attempts
         num_results: Max results to return
         depth: 'fast', 'standard', or 'deep' - controls query expansion
-        provider: Search provider ('duckduckgo' or future providers)
+        provider: Deprecated, kept for compatibility
 
     Returns structured JSON with deduplicated, ranked results.
     """
-    duck = get_duck()
-    if duck is None:
+    searxng = get_searxng()
+    if searxng is None:
         return json.dumps({
             "query": query,
-            "error": "duck.py not available",
+            "error": "searxng.py not available",
             "results": []
         })
 
@@ -1400,12 +1413,11 @@ async def cdp_search_with_retry(
 
     for attempt in range(retries):
         try:
-            # Use the new search engine with expansion
-            results = await duck.search_with_expansion(
+            # Use SearXNG search engine with expansion
+            results = await searxng.search_with_expansion(
                 query=query,
                 depth=depth,
-                max_results=num_results,
-                provider=provider
+                max_results=num_results
             )
 
             print(f"[SEARCH] Found {results.get('num_results', 0)} results", file=sys.stderr, flush=True)

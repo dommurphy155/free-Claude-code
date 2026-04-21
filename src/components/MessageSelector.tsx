@@ -813,7 +813,7 @@ export function messagesAfterAreOnlySynthetic(messages: Message[], fromIndex: nu
     if (msg.type === 'assistant') {
       const content = msg.message.content;
       if (Array.isArray(content)) {
-        const hasMeaningfulContent = content.some(block => block.type === 'text' && block.text?.trim() || block.type === 'tool_use');
+        const hasMeaningfulContent = content.some(block => block.type === 'text' && block.text.trim() || block.type === 'tool_use');
         if (hasMeaningfulContent) return false;
       }
       continue;

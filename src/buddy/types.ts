@@ -124,11 +124,11 @@ export type Companion = CompanionBones &
 export type StoredCompanion = CompanionSoul & { hatchedAt: number }
 
 export const RARITY_WEIGHTS = {
-  common: 60,
-  uncommon: 25,
-  rare: 10,
-  epic: 4,
-  legendary: 1,
+  common: 10,
+  uncommon: 15,
+  rare: 20,
+  epic: 25,
+  legendary: 30,
 } as const satisfies Record<Rarity, number>
 
 export const RARITY_STARS = {

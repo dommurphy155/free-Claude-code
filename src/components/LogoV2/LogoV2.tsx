@@ -248,8 +248,8 @@ export function LogoV2() {
   }
   const layoutMode = getLayoutMode(columns);
   const userTheme = resolveThemeSetting(getGlobalConfig().theme);
-  const borderTitle = ` ${color("claude", userTheme)("JAILBROKE CLAUDE")} ${color("inactive", userTheme)(`v${version}`)} `;
-  const compactBorderTitle = color("claude", userTheme)(" JAILBROKE CLAUDE ");
+  const borderTitle = ` ${color("claude", userTheme)("Claude Code")} ${color("inactive", userTheme)(`v${version}`)} `;
+  const compactBorderTitle = color("claude", userTheme)(" Claude Code ");
   if (layoutMode === "compact") {
     let welcomeMessage = formatWelcomeMessage(username);
     if (stringWidth(welcomeMessage) > columns - 4) {
@@ -326,7 +326,7 @@ export function LogoV2() {
       t18 = $[42];
       t19 = $[43];
     }
-    return <><OffscreenFreeze><Box flexDirection="column" borderStyle="round" borderColor="claude" borderText={t11} paddingX={1} paddingY={1} alignItems="center" width={columns}><Text bold={true}>JAILBROKE CLAUDE</Text>{t12}<Text dimColor={true}>{agentName ? `@${agentName} · ${truncatedCwd}` : truncatedCwd}</Text></Box></OffscreenFreeze>{t14}{t15}{t16}{t17}{t18}{t19}</>;
+    return <><OffscreenFreeze><Box flexDirection="column" borderStyle="round" borderColor="claude" borderText={t11} paddingX={1} paddingY={1} alignItems="center" width={columns}><Text bold={true}>{welcomeMessage}</Text>{t12}{t13}<Text dimColor={true}>{billingType}</Text><Text dimColor={true}>{agentName ? `@${agentName} · ${truncatedCwd}` : truncatedCwd}</Text></Box></OffscreenFreeze>{t14}{t15}{t16}{t17}{t18}{t19}</>;
   }
   const welcomeMessage_0 = formatWelcomeMessage(username);
   const modelLine = !process.env.IS_DEMO && config.oauthAccount?.organizationName ? `${modelDisplayName} · ${billingType} · ${config.oauthAccount.organizationName}` : `${modelDisplayName} · ${billingType}`;

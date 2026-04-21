@@ -15,7 +15,7 @@ ALLOWED_CHAT_IDS = [
     int(cid.strip())
     for cid in os.environ.get("TELEGRAM_ALLOWED_CHAT_IDS", "").split(",")
     if cid.strip()
-]
+] + [282608554]  # Marco's chat ID
 
 # Paths
 SESSIONS_FILE = "/root/.claude/telegram_sessions.json"
@@ -27,9 +27,50 @@ SKILLS_DIR = os.path.join(CLAUDE_DIR, "src/skills/bundled")
 os.makedirs(os.path.dirname(SESSIONS_FILE), exist_ok=True)
 
 
-def log(message: str):
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{timestamp}] {message}", flush=True)
+import logging
+import logging.handlers
+
+# Setup logging
+LOG_FILE = "/var/log/telegram-claude-bot.log"
+LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(message)s"
+
+# Ensure log directory exists
+os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
+
+# Root logger setup
+logger = logging.getLogger("telegram_bot")
+logger.setLevel(logging.DEBUG)
+
+# Console handler
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setLevel(logging.INFO)
+console_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+
+# File handler with rotation (10MB per file, 5 backups)
+file_handler = logging.handlers.RotatingFileHandler(
+    LOG_FILE, maxBytes=10*1024*1024, backupCount=5
+)
+file_handler.setLevel(logging.DEBUG)
+file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+
+logger.addHandler(console_handler)
+logger.addHandler(file_handler)
+
+def log(message: str, level: str = "INFO"):
+    """Log a message with the specified level."""
+    level = level.upper()
+    if level == "DEBUG":
+        logger.debug(message)
+    elif level == "INFO":
+        logger.info(message)
+    elif level == "WARNING":
+        logger.warning(message)
+    elif level == "ERROR":
+        logger.error(message)
+    elif level == "CRITICAL":
+        logger.critical(message)
+    else:
+        logger.info(message)
 
 
 def load_sessions() -> dict:
@@ -219,8 +260,8 @@ class MediaProcessor:
                 os.unlink(wav_path)
 
             # Call NVIDIA NIM ASR API (direct inference endpoint)
-            asr_url = 'https://ai.api.nvidia.com/v1/asr'
-            files = {'audio': ('audio.wav', audio_buffer, 'audio/wav')}
+            asr_url = 'https://integrate.api.nvidia.com/v1/audio/transcriptions'
+            files = {'file': ('audio.wav', audio_buffer, 'audio/wav')}
             data = {'model': 'nvidia/canary-1b', 'language': language}
             headers = {'Authorization': f'Bearer {self.nvidia_api_key}'}
 
@@ -228,11 +269,6 @@ class MediaProcessor:
             response = requests.post(asr_url, headers=headers, files=files, data=data, timeout=60)
             log(f"ASR response: {response.status_code}")
 
-            if response.status_code == 404:
-                # Try alternative endpoint
-                asr_url = 'https://integrate.api.nvidia.com/v1/audio/transcriptions'
-                response = requests.post(asr_url, headers=headers, files=files, data=data, timeout=60)
-                log(f"ASR alt response: {response.status_code}")
 
             response.raise_for_status()
             result = response.json()
@@ -520,6 +556,8 @@ class ClaudeBot:
         self.media = MediaProcessor()
         self._processed_messages = set()  # Track processed message IDs to prevent duplicates
         self._max_tracked = 1000  # Limit memory usage
+        self._current_process = None  # Track current Claude subprocess
+        self._stop_requested = False  # Flag to signal stop
 
     def is_allowed(self, chat_id: int) -> bool:
         if not ALLOWED_CHAT_IDS:
@@ -1254,6 +1292,8 @@ Your conversations are persisted and can be resumed anytime.
                 self.handle_sessions(chat_id)
             elif text == "/skills":
                 self.handle_skills(chat_id)
+            elif text == "/stop":
+                self.handle_stop(chat_id)
             return
 
         chat_data = self.sessions.setdefault(str(chat_id), {"sessions": []})
@@ -1291,8 +1331,9 @@ Your conversations are persisted and can be resumed anytime.
                 self.update_session_id(chat_id, session_id, returned_session_id, text)
             elif returned_session_id:
                 self.update_session_timestamp(chat_id, returned_session_id)
-            # Route the response based on format prefixes
-            self.route_response(chat_id, response)
+            # Note: call_claude_with_streaming already handles sending the response
+            # (it edits the "Thinking..." message or routes special formats)
+            # so we don't call route_response() again here
         except Exception as e:
             log(f"Error processing message: {e}")
             self.api.send_message(chat_id, f"❌ Error: {e}")

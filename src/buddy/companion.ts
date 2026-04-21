@@ -7,6 +7,7 @@ import {
   RARITIES,
   RARITY_WEIGHTS,
   type Rarity,
+  type Species,
   SPECIES,
   STAT_NAMES,
   type StatName,
@@ -121,13 +122,35 @@ export function companionUserId(): string {
   return config.oauthAccount?.accountUuid ?? config.userID ?? 'anon'
 }
 
-// Regenerate bones from userId, merge with stored soul. Bones never persist
-// so species renames and SPECIES-array edits can't break stored companions,
-// and editing config.companion can't fake a rarity.
+function storedAppearanceSeed(stored: {
+  appearanceSeed?: string
+  hatchedAt: number
+  name: string
+  personality: string
+}): string {
+  return (
+    stored.appearanceSeed ??
+    `legacy:${stored.hatchedAt}:${stored.name}:${stored.personality}`
+  )
+}
+
+function applyStoredOverrides(
+  bones: CompanionBones,
+  stored: { speciesOverride?: Species },
+): CompanionBones {
+  return stored.speciesOverride
+    ? { ...bones, species: stored.speciesOverride }
+    : bones
+}
+
+// Regenerate bones from the stored hatch seed, merge with the saved soul.
+// Old configs without a seed get a deterministic legacy fallback so they stop
+// changing every render without requiring users to re-hatch.
 export function getCompanion(): Companion | undefined {
   const stored = getGlobalConfig().companion
   if (!stored) return undefined
-  const { bones } = roll(companionUserId())
+  const { bones: rolledBones } = rollWithSeed(storedAppearanceSeed(stored))
+  const bones = applyStoredOverrides(rolledBones, stored)
   // bones last so stale bones fields in old-format configs get overridden
   return { ...stored, ...bones }
 }
