@@ -221,19 +221,63 @@ def create_venv() -> Path:
     print(f"Creating Python virtual environment at {venv_path}...")
     venv_path.parent.mkdir(parents=True, exist_ok=True)
     python = find_system_python()
-    code, out, err = run_command([python, "-m", "venv", str(venv_path)], check=False)
-    if code != 0:
-        print_colored(f"Failed to create venv: {err}", Colors.FAIL)
-        sys.exit(1)
 
-    set_bridge_venv_path(venv_path)
-    return venv_path
+    # Try different venv creation methods
+    methods = [
+        # Method 1: Standard venv
+        ([python, "-m", "venv", str(venv_path)], "standard venv"),
+        # Method 2: venv without pip (sometimes works when standard fails)
+        ([python, "-m", "venv", str(venv_path), "--without-pip"], "venv without pip"),
+    ]
+
+    # Method 3: Try virtualenv if available
+    virtualenv_cmd = shutil.which("virtualenv")
+    if virtualenv_cmd:
+        methods.append(([virtualenv_cmd, "-p", python, str(venv_path)], "virtualenv"))
+
+    for cmd, desc in methods:
+        print(f"  Trying {desc}...")
+        code, out, err = run_command(cmd, check=False)
+        if code == 0:
+            print_colored(f"✓ Created venv using {desc}", Colors.GREEN)
+            set_bridge_venv_path(venv_path)
+            return venv_path
+        else:
+            print_colored(f"  {desc} failed: {err[:100] if err else 'unknown error'}", Colors.WARNING)
+
+    # All methods failed - check common issues
+    print_colored("\n⚠️ Virtual environment creation failed.", Colors.FAIL)
+
+    # Check if python3-venv is installed (Debian/Ubuntu)
+    code, _, _ = run_command(["dpkg", "-l", "python3-venv"], check=False)
+    if code != 0 and os.path.exists("/usr/bin/apt-get"):
+        print_colored("\n💡 Missing python3-venv package. Try:", Colors.CYAN)
+        print_colored("   sudo apt-get update && sudo apt-get install -y python3-venv", Colors.CYAN)
+
+    # Check if ensurepip is available
+    code, _, _ = run_command([python, "-c", "import ensurepip"], check=False)
+    if code != 0:
+        print_colored("\n💡 Python ensurepip module not available.", Colors.CYAN)
+        print_colored("   Your Python may be a minimal install without venv support.", Colors.CYAN)
+
+    # Offer fallback to system python
+    print_colored("\n🔄 Fallback option: Use system Python without venv?", Colors.WARNING)
+    response = input("Continue with system Python? (yes/no): ").strip().lower()
+    if response in ('y', 'yes'):
+        print_colored("Using system Python. Some isolation features may not work.", Colors.WARNING)
+        # Return a dummy path that signals "use system python"
+        return None
+
+    sys.exit(1)
 
 
 def get_venv_python(venv_path: Optional[Path] = None) -> Optional[Path]:
     """Get the Python executable path in the virtual environment."""
     if venv_path is None:
         venv_path = get_bridge_venv_path()
+    # Handle fallback to system python (venv_path is None)
+    if venv_path is None:
+        return Path(find_system_python())
     if not venv_path.exists():
         return None
     if os.name == 'nt':
@@ -399,11 +443,21 @@ def install_dependencies():
     """Install required Python packages into bridge venv."""
     # Ensure we have the bridge venv
     venv_path = get_bridge_venv_path()
-    if not venv_path.exists():
+    if venv_path is None:
+        # Using system python fallback
+        print_colored("Using system Python (no venv isolation)", Colors.WARNING)
+        venv_path = None
+    elif not venv_path.exists():
         venv_path = create_venv()
+        if venv_path is None:
+            print_colored("Using system Python (venv creation failed)", Colors.WARNING)
 
     deps = ['requests', 'playwright', 'psutil', 'httpx', 'websockets', 'fastapi', 'uvicorn']
-    print(f"Installing dependencies into {venv_path}: {', '.join(deps)}")
+
+    if venv_path:
+        print(f"Installing dependencies into {venv_path}: {', '.join(deps)}")
+    else:
+        print(f"Installing dependencies into system Python: {', '.join(deps)}")
 
     pip_cmd = get_pip_cmd()
     code, out, err = run_command(pip_cmd + ['install'] + deps, check=False)

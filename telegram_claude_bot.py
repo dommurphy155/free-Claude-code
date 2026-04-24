@@ -15,7 +15,7 @@ ALLOWED_CHAT_IDS = [
     int(cid.strip())
     for cid in os.environ.get("TELEGRAM_ALLOWED_CHAT_IDS", "").split(",")
     if cid.strip()
-] + [282608554]  # Marco's chat ID
+]
 
 # Paths
 SESSIONS_FILE = "/root/.claude/telegram_sessions.json"
