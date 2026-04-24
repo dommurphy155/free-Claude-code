@@ -25,6 +25,154 @@ class Colors:
     BOLD = '\033[1m'
 
 
+def detect_package_manager() -> Optional[str]:
+    """Detect the system's package manager."""
+    if os.path.exists('/usr/bin/apt-get') or os.path.exists('/usr/bin/apt'):
+        return 'apt'
+    if os.path.exists('/usr/bin/dnf'):
+        return 'dnf'
+    if os.path.exists('/usr/bin/yum'):
+        return 'yum'
+    if os.path.exists('/usr/bin/pacman'):
+        return 'pacman'
+    if os.path.exists('/usr/bin/apk'):
+        return 'apk'
+    return None
+
+
+def install_system_package(package: str, pkg_manager: str) -> bool:
+    """Install a system package using the detected package manager."""
+    print(f"Installing {package}...")
+
+    if pkg_manager == 'apt':
+        cmd = ['apt-get', 'install', '-y', package]
+    elif pkg_manager == 'dnf':
+        cmd = ['dnf', 'install', '-y', package]
+    elif pkg_manager == 'yum':
+        cmd = ['yum', 'install', '-y', package]
+    elif pkg_manager == 'pacman':
+        cmd = ['pacman', '-S', '--noconfirm', package]
+    elif pkg_manager == 'apk':
+        cmd = ['apk', 'add', package]
+    else:
+        return False
+
+    code, _, err = run_command(cmd, sudo=True, check=False)
+    return code == 0
+
+
+def ensure_python_installed() -> bool:
+    """Ensure Python 3 and pip are installed, auto-install if missing."""
+    pkg_manager = detect_package_manager()
+    if not pkg_manager:
+        print_colored("⚠️ Could not detect package manager", Colors.FAIL)
+        return False
+
+    print(f"Detected package manager: {pkg_manager}")
+
+    # Update package lists first
+    print("Updating package lists...")
+    if pkg_manager == 'apt':
+        run_command(['apt-get', 'update'], sudo=True, check=False)
+    elif pkg_manager == 'dnf':
+        run_command(['dnf', 'check-update'], sudo=True, check=False)
+    elif pkg_manager == 'pacman':
+        run_command(['pacman', '-Sy'], sudo=True, check=False)
+
+    # Check and install Python
+    python_cmd = shutil.which('python3') or shutil.which('python')
+    if not python_cmd:
+        print_colored("Python not found, installing...", Colors.WARNING)
+
+        if pkg_manager == 'apt':
+            install_system_package('python3', pkg_manager)
+            install_system_package('python3-pip', pkg_manager)
+            install_system_package('python3-venv', pkg_manager)
+        elif pkg_manager in ('dnf', 'yum'):
+            install_system_package('python3', pkg_manager)
+            install_system_package('python3-pip', pkg_manager)
+        elif pkg_manager == 'pacman':
+            install_system_package('python', pkg_manager)
+            install_system_package('python-pip', pkg_manager)
+        elif pkg_manager == 'apk':
+            install_system_package('python3', pkg_manager)
+            install_system_package('py3-pip', pkg_manager)
+
+        python_cmd = shutil.which('python3') or shutil.which('python')
+        if not python_cmd:
+            print_colored("Failed to install Python", Colors.FAIL)
+            return False
+        print_colored(f"✓ Python installed at {python_cmd}", Colors.GREEN)
+    else:
+        print_colored(f"✓ Python found: {python_cmd}", Colors.GREEN)
+
+    # Check and install pip
+    pip_cmd = shutil.which('pip3') or shutil.which('pip')
+    if not pip_cmd:
+        print_colored("Pip not found, installing...", Colors.WARNING)
+
+        if pkg_manager == 'apt':
+            install_system_package('python3-pip', pkg_manager)
+            install_system_package('python3-venv', pkg_manager)
+        elif pkg_manager in ('dnf', 'yum'):
+            install_system_package('python3-pip', pkg_manager)
+        elif pkg_manager == 'pacman':
+            install_system_package('python-pip', pkg_manager)
+        elif pkg_manager == 'apk':
+            install_system_package('py3-pip', pkg_manager)
+
+        pip_cmd = shutil.which('pip3') or shutil.which('pip')
+        if not pip_cmd:
+            print("Attempting to install pip via get-pip.py...")
+            run_command(['curl', '-s', '-o', '/tmp/get-pip.py',
+                        'https://bootstrap.pypa.io/get-pip.py'], check=False)
+            python = find_system_python()
+            run_command([python, '/tmp/get-pip.py'], sudo=True, check=False)
+            pip_cmd = shutil.which('pip3') or shutil.which('pip')
+
+        if not pip_cmd:
+            print_colored("Failed to install pip", Colors.FAIL)
+            return False
+        print_colored(f"✓ Pip installed at {pip_cmd}", Colors.GREEN)
+    else:
+        print_colored(f"✓ Pip found: {pip_cmd}", Colors.GREEN)
+
+    # Check and install venv support
+    python = find_system_python()
+    code, _, _ = run_command([python, '-m', 'venv', '--help'], check=False)
+    if code != 0:
+        print_colored("Python venv module not found, installing...", Colors.WARNING)
+
+        if pkg_manager == 'apt':
+            install_system_package('python3-venv', pkg_manager)
+        elif pkg_manager in ('dnf', 'yum'):
+            install_system_package('python3-virtualenv', pkg_manager)
+
+    # Check for curl
+    curl_cmd = shutil.which('curl')
+    if not curl_cmd:
+        print_colored("curl not found, installing...", Colors.WARNING)
+        install_system_package('curl', pkg_manager)
+        curl_cmd = shutil.which('curl')
+        if not curl_cmd:
+            print_colored("Failed to install curl", Colors.FAIL)
+            return False
+        print_colored("✓ curl installed", Colors.GREEN)
+
+    # Check for git
+    git_cmd = shutil.which('git')
+    if not git_cmd:
+        print_colored("git not found, installing...", Colors.WARNING)
+        install_system_package('git', pkg_manager)
+        git_cmd = shutil.which('git')
+        if not git_cmd:
+            print_colored("Failed to install git", Colors.FAIL)
+            return False
+        print_colored("✓ git installed", Colors.GREEN)
+
+    return True
+
+
 def check_system_requirements():
     """Check if the system meets minimum requirements."""
     issues = []
@@ -2087,6 +2235,13 @@ def main():
     """Main wizard flow."""
     platform = get_platform()
     total_steps = 9 if platform == 'linux' else 8  # Extra step for Telegram on Linux
+
+    # STEP 0: Ensure Python and dependencies are installed
+    print_step(0, total_steps, "Install System Dependencies")
+    if not ensure_python_installed():
+        print_colored("\n⚠️ Could not install required dependencies automatically.", Colors.FAIL)
+        print_colored("Please install Python 3.8+, pip, and curl manually, then re-run.", Colors.FAIL)
+        sys.exit(1)
 
     # Check system requirements first
     check_system_requirements()
