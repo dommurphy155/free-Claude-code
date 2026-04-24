@@ -209,7 +209,34 @@ def get_venv_path() -> Optional[Path]:
     return None
 
 
-def create_venv() -> Path:
+def bootstrap_pip_in_venv(venv_path: Path) -> bool:
+    """Bootstrap pip into a venv that was created without it."""
+    venv_python = get_venv_python(venv_path)
+    if not venv_python:
+        return False
+
+    # Try ensurepip first
+    print("  Bootstrapping pip via ensurepip...")
+    code, _, _ = run_command([str(venv_python), "-m", "ensurepip", "--upgrade"], check=False)
+    if code == 0:
+        return True
+
+    # Fall back to get-pip.py
+    print("  Downloading get-pip.py...")
+    get_pip_path = venv_path.parent / "get-pip.py"
+    code, _, _ = run_command([
+        "curl", "-s", "-o", str(get_pip_path),
+        "https://bootstrap.pypa.io/get-pip.py"
+    ], check=False)
+    if code == 0 and get_pip_path.exists():
+        code, _, _ = run_command([str(venv_python), str(get_pip_path)], check=False)
+        get_pip_path.unlink(missing_ok=True)
+        return code == 0
+
+    return False
+
+
+def create_venv() -> Optional[Path]:
     """Create Python virtual environment for the bridge."""
     venv_path = get_bridge_venv_path()
 
@@ -226,7 +253,7 @@ def create_venv() -> Path:
     methods = [
         # Method 1: Standard venv
         ([python, "-m", "venv", str(venv_path)], "standard venv"),
-        # Method 2: venv without pip (sometimes works when standard fails)
+        # Method 2: venv without pip (we'll bootstrap after)
         ([python, "-m", "venv", str(venv_path), "--without-pip"], "venv without pip"),
     ]
 
@@ -241,34 +268,22 @@ def create_venv() -> Path:
         if code == 0:
             print_colored(f"✓ Created venv using {desc}", Colors.GREEN)
             set_bridge_venv_path(venv_path)
+
+            # Check if pip is available, bootstrap if not
+            venv_pip = get_venv_pip(venv_path)
+            if not venv_pip:
+                print("  Pip not found in venv, bootstrapping...")
+                if bootstrap_pip_in_venv(venv_path):
+                    print_colored("  ✓ Pip bootstrapped successfully", Colors.GREEN)
+                else:
+                    print_colored("  ⚠ Could not bootstrap pip, will use system pip", Colors.WARNING)
             return venv_path
         else:
             print_colored(f"  {desc} failed: {err[:100] if err else 'unknown error'}", Colors.WARNING)
 
-    # All methods failed - check common issues
-    print_colored("\n⚠️ Virtual environment creation failed.", Colors.FAIL)
-
-    # Check if python3-venv is installed (Debian/Ubuntu)
-    code, _, _ = run_command(["dpkg", "-l", "python3-venv"], check=False)
-    if code != 0 and os.path.exists("/usr/bin/apt-get"):
-        print_colored("\n💡 Missing python3-venv package. Try:", Colors.CYAN)
-        print_colored("   sudo apt-get update && sudo apt-get install -y python3-venv", Colors.CYAN)
-
-    # Check if ensurepip is available
-    code, _, _ = run_command([python, "-c", "import ensurepip"], check=False)
-    if code != 0:
-        print_colored("\n💡 Python ensurepip module not available.", Colors.CYAN)
-        print_colored("   Your Python may be a minimal install without venv support.", Colors.CYAN)
-
-    # Offer fallback to system python
-    print_colored("\n🔄 Fallback option: Use system Python without venv?", Colors.WARNING)
-    response = input("Continue with system Python? (yes/no): ").strip().lower()
-    if response in ('y', 'yes'):
-        print_colored("Using system Python. Some isolation features may not work.", Colors.WARNING)
-        # Return a dummy path that signals "use system python"
-        return None
-
-    sys.exit(1)
+    # All methods failed - auto-fallback to system python
+    print_colored("\n⚠️ Virtual environment creation failed, using system Python.", Colors.WARNING)
+    return None
 
 
 def get_venv_python(venv_path: Optional[Path] = None) -> Optional[Path]:
@@ -302,8 +317,24 @@ def get_pip_cmd() -> List[str]:
     """Get pip command as list, preferring venv pip but falling back to system."""
     # Always use the bridge venv for consistency
     venv_path = get_bridge_venv_path()
+
+    # If venv_path is None, we're using system python
+    if venv_path is None:
+        system_pip = find_system_pip()
+        if system_pip:
+            return [system_pip]
+        return [find_system_python(), "-m", "pip"]
+
     if not venv_path.exists():
         create_venv()
+        venv_path = get_bridge_venv_path()
+
+    # If still None after create, use system
+    if venv_path is None:
+        system_pip = find_system_pip()
+        if system_pip:
+            return [system_pip]
+        return [find_system_python(), "-m", "pip"]
 
     venv_pip = get_venv_pip(venv_path)
     if venv_pip:
