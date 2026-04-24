@@ -889,11 +889,12 @@ Your conversations are persisted and can be resumed anytime.
             "claude", "-p", "--dangerously-skip-permissions",
             "--output-format", "json",
             "--resume", session_id,
-            "testing",
+            "hi",
         ]
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, cwd=CLAUDE_DIR, timeout=30)
-            if result.returncode == 0:
+            # If exit code is 0 and we got JSON back with a result, session is valid
+            if result.returncode == 0 and result.stdout.strip():
                 stdout = result.stdout.strip()
                 # Try to find a line that's valid JSON with a "result" field
                 for line in stdout.split('\n'):
@@ -903,17 +904,16 @@ Your conversations are persisted and can be resumed anytime.
                     try:
                         data = json.loads(line)
                         if isinstance(data, dict) and "result" in data:
-                            response = data.get("result", "").strip().lower()
-                            if "ok" in response or "testing" in response:
-                                return True, data.get("session_id", session_id)
+                            return True, data.get("session_id", session_id)
                     except json.JSONDecodeError:
                         continue
                 # Fallback: try parsing entire stdout
-                data = json.loads(stdout)
-                if isinstance(data, dict):
-                    response = data.get("result", "").strip().lower()
-                    if "ok" in response or "testing" in response:
+                try:
+                    data = json.loads(stdout)
+                    if isinstance(data, dict) and "result" in data:
                         return True, data.get("session_id", session_id)
+                except json.JSONDecodeError:
+                    pass
             return False, None
         except Exception as e:
             log(f"Error validating session: {e}")
