@@ -365,11 +365,30 @@ def bootstrap_pip_in_venv(venv_path: Path) -> bool:
 
     # Try ensurepip first
     print("  Bootstrapping pip via ensurepip...")
-    code, _, _ = run_command([str(venv_python), "-m", "ensurepip", "--upgrade"], check=False)
+    code, out, err = run_command([str(venv_python), "-m", "ensurepip", "--upgrade"], check=False)
     if code == 0:
+        # Also upgrade pip to latest
+        run_command([str(venv_python), "-m", "pip", "install", "--upgrade", "pip"], check=False)
         return True
+    print(f"    ensurepip failed: {err[:100] if err else 'unknown error'}")
 
-    # Fall back to get-pip.py
+    # Method 2: Copy pip from system Python
+    print("  Trying to copy pip from system Python...")
+    system_pip = find_system_pip()
+    if system_pip:
+        # Get pip's location and copy it
+        code, out, _ = run_command([system_pip, "-m", "pip", "--version"], check=False)
+        if code == 0:
+            # Try installing pip using system pip but target the venv
+            site_packages = venv_path / "lib" / f"python{sys.version_info.major}.{sys.version_info.minor}" / "site-packages"
+            if site_packages.exists():
+                code, _, _ = run_command([
+                    system_pip, "install", "--target", str(site_packages), "pip"
+                ], check=False)
+                if code == 0:
+                    return True
+
+    # Method 3: Fall back to get-pip.py
     print("  Downloading get-pip.py...")
     get_pip_path = venv_path.parent / "get-pip.py"
     code, _, _ = run_command([
@@ -377,9 +396,11 @@ def bootstrap_pip_in_venv(venv_path: Path) -> bool:
         "https://bootstrap.pypa.io/get-pip.py"
     ], check=False)
     if code == 0 and get_pip_path.exists():
-        code, _, _ = run_command([str(venv_python), str(get_pip_path)], check=False)
+        code, _, err = run_command([str(venv_python), str(get_pip_path)], check=False)
         get_pip_path.unlink(missing_ok=True)
-        return code == 0
+        if code == 0:
+            return True
+        print(f"    get-pip.py failed: {err[:100] if err else 'unknown error'}")
 
     return False
 
@@ -391,6 +412,15 @@ def create_venv() -> Optional[Path]:
     if venv_path.exists():
         print(f"Using existing virtual environment at {venv_path}")
         set_bridge_venv_path(venv_path)
+
+        # Check if pip is available, bootstrap if not
+        venv_pip = get_venv_pip(venv_path)
+        if not venv_pip:
+            print("  Pip not found in venv, bootstrapping...")
+            if bootstrap_pip_in_venv(venv_path):
+                print_colored("  ✓ Pip bootstrapped successfully", Colors.GREEN)
+            else:
+                print_colored("  ⚠ Could not bootstrap pip, will use system pip", Colors.WARNING)
         return venv_path
 
     print(f"Creating Python virtual environment at {venv_path}...")
@@ -630,6 +660,16 @@ def install_dependencies():
         venv_path = create_venv()
         if venv_path is None:
             print_colored("Using system Python (venv creation failed)", Colors.WARNING)
+    else:
+        # Venv exists - ensure pip is available
+        venv_pip = get_venv_pip(venv_path)
+        if not venv_pip:
+            print("Venv exists but pip not found, bootstrapping...")
+            if bootstrap_pip_in_venv(venv_path):
+                print_colored("✓ Pip bootstrapped successfully", Colors.GREEN)
+            else:
+                print_colored("⚠ Could not bootstrap pip, will try system pip", Colors.WARNING)
+                venv_path = None
 
     deps = ['requests', 'playwright', 'psutil', 'httpx', 'websockets', 'fastapi', 'uvicorn']
 
