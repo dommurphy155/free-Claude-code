@@ -674,7 +674,7 @@ async def execute_browser_action(action: Dict[str, Any]) -> Dict[str, Any]:
                     page_text = await page.inner_text("body")
                     if text in page_text:
                         return {"success": True, "action_result": f"Found text: {text}"}
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(0.2)  # Minimal pause between steps
                 return {"success": False, "error": f"Timeout waiting for text: {text}"}
             else:
                 return {"success": False, "error": "wait_for requires selector or text"}
@@ -980,19 +980,19 @@ async def cdp_browser_task_stream(goal: str, start_url: str = None):
                     yield {"type": "progress", "message": f"Navigating to {start_url}..."}
                     try:
                         await page.goto(start_url, wait_until="domcontentloaded", timeout=20000)
-                        await asyncio.sleep(2)
+                        await asyncio.sleep(0.2)  # Minimal pause between steps  # Minimal buffer for JS
                         yield {"type": "progress", "message": f"Page loaded: {page.url}"}
                     except Exception as nav_err:
                         yield {"type": "progress", "message": f"Navigation warning: {str(nav_err)[:50]}"}
                         await page.goto(start_url, wait_until="load", timeout=15000)
-                        await asyncio.sleep(1)
+                        await asyncio.sleep(0.3)  # Minimal buffer
 
             task_context = {
                 "goal": goal,
                 "actions_taken": [],
-                "step_budget": 5,  # Start small, extend if needed
+                "step_budget": 8,  # Start higher, fewer re-budgeting needed
                 "budget_extensions": 0,
-                "max_budget": 20
+                "max_budget": 25
             }
 
             step = 0
@@ -1040,7 +1040,7 @@ async def cdp_browser_task_stream(goal: str, start_url: str = None):
                     task_context["budget_extensions"] += 1
                     yield {"type": "progress", "message": f"Extending step budget to {task_context['step_budget']}..."}
 
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.2)  # Minimal pause between steps
 
             # Check if we have any extracted data from previous steps
             for past in reversed(task_context["actions_taken"]):
@@ -1104,19 +1104,19 @@ async def cdp_browser_task(goal: str, start_url: str = None) -> str:
                     # Use domcontentloaded for faster navigation, then wait 2s for JS
                     try:
                         await page.goto(start_url, wait_until="domcontentloaded", timeout=20000)
-                        await asyncio.sleep(2)  # Buffer for JS/ajax
+                        await asyncio.sleep(0.2)  # Minimal pause between steps  # Minimal buffer for JS/ajax
                     except Exception as nav_err:
                         print(f"[BROWSER] Navigation warning: {nav_err}", file=sys.stderr)
                         # If domcontentloaded fails, try with load event
                         await page.goto(start_url, wait_until="load", timeout=15000)
-                        await asyncio.sleep(1)
+                        await asyncio.sleep(0.3)  # Minimal buffer
 
             task_context = {
                 "goal": goal,
                 "actions_taken": [],
-                "step_budget": 5,  # Start small, extend if needed
+                "step_budget": 8,  # Start higher, fewer re-budgeting needed
                 "budget_extensions": 0,
-                "max_budget": 20
+                "max_budget": 25
             }
 
             step = 0
@@ -1158,7 +1158,7 @@ async def cdp_browser_task(goal: str, start_url: str = None) -> str:
                     print(f"[BROWSER] Extending step budget to {task_context['step_budget']}", file=sys.stderr)
 
                 # Brief pause between actions
-                await asyncio.sleep(0.5)
+                await asyncio.sleep(0.2)  # Minimal pause between steps
 
             # Check if we have any extracted data from previous steps
             for past in reversed(task_context["actions_taken"]):
