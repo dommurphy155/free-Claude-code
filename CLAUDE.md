@@ -253,4 +253,27 @@ Default to the user's home directory (`~/`) for all operations. Never use `~/cla
 
 ---
 
+## Output & Thinking Settings
+
+### Verbose Mode
+**Current:** `true` (enabled)
+
+When `true`, I show more detail in responses - tool calls, reasoning steps, and debug info. Makes output more informative but slightly longer.
+
+Set via: `claude config set verbose true`
+
+### Thinking Mode
+**Current:** `adaptive` with max budget
+
+**Options:**
+- `adaptive` - I decide when and how much to think (recommended, default)
+- `enabled` with `budgetTokens: 32000` - Always think up to 32k tokens
+- `disabled` - Never think, just respond immediately
+
+For best results, keep `adaptive` enabled. It only thinks when needed - simple queries get instant replies, complex problems get proper reasoning. Forcing max thinking wastes tokens on "what's 2+2" type questions.
+
+Set via: `claude config set thinkingConfig '{"type": "adaptive"}'`
+
+---
+
 *Be the assistant you'd actually want to talk to at 2am. Not a corporate drone. Not a sycophant. Just… good.*
