@@ -489,7 +489,26 @@ class TelegramAPI:
             params["parse_mode"] = parse_mode
         if reply_markup:
             params["reply_markup"] = json.dumps(reply_markup)
-        return self._request("sendMessage", **params)
+        # Retry once on rate limit
+        for attempt in range(3):
+            url = f"{self.base_url}/sendMessage"
+            try:
+                response = requests.post(url, json=params, timeout=30)
+                if response.status_code == 429:
+                    retry_after = response.json().get("parameters", {}).get("retry_after", 10)
+                    log(f"Rate limited on sendMessage, waiting {retry_after}s")
+                    time.sleep(retry_after)
+                    continue
+                response.raise_for_status()
+                data = response.json()
+                if not isinstance(data, dict):
+                    return {}
+                return data
+            except requests.RequestException as e:
+                log(f"Request error in sendMessage: {e}")
+                if attempt < 2:
+                    time.sleep(3)
+        return {}
 
     def edit_message(self, chat_id: int, message_id: int, text: str, parse_mode: Optional[str] = None) -> dict:
         params = {"chat_id": chat_id, "message_id": message_id, "text": text[:4000]}
@@ -772,13 +791,19 @@ class ClaudeBot:
         dots = ["⏳", "⌛", "⏳", "⌛"]
         i = 0
         status = None
+        spinner_interval = 8  # update every 8 seconds to avoid rate limits
+        spinner_tick = 0
+        spinner_max_updates = 37  # stop after ~5 minutes of spinner updates
         while thread.is_alive():
             try:
-                status = output_queue.get(timeout=0.5)
+                status = output_queue.get(timeout=1)
                 break
             except queue.Empty:
-                self.api.edit_message(chat_id, message_id, f"{dots[i % 4]} Thinking...")
-                i += 1
+                spinner_tick += 1
+                if spinner_tick >= spinner_interval and i < spinner_max_updates:
+                    spinner_tick = 0
+                    self.api.edit_message(chat_id, message_id, f"{dots[i % 4]} Thinking...")
+                    i += 1
         if status is None:
             try:
                 status = output_queue.get(timeout=2)
