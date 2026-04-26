@@ -558,6 +558,11 @@ class ClaudeBot:
         self._max_tracked = 1000  # Limit memory usage
         self._current_process = None  # Track current Claude subprocess
         self._stop_requested = False  # Flag to signal stop
+        # Job tracking for concurrent requests and /stop
+        import threading
+        self._jobs = {}  # job_id -> {"thread": t, "stop_event": e, "chat_id": cid, "preview": str, "message_id": mid}
+        self._jobs_lock = threading.Lock()
+        self._job_counter = 0
 
     def is_allowed(self, chat_id: int) -> bool:
         if not ALLOWED_CHAT_IDS:
@@ -710,19 +715,34 @@ class ClaudeBot:
         message_id = result_data.get("message_id") if isinstance(result_data, dict) else None
 
         if not message_id:
-            response, returned_session_id = self.call_claude(message, session_id)
-            return response, returned_session_id
+            return self.call_claude(message, session_id)
 
         output_queue = queue.Queue()
+        stop_event = threading.Event()
 
         def run_claude():
             try:
-                result = subprocess.run(cmd, capture_output=True, text=True, cwd=CLAUDE_DIR, timeout=2700)
-                if result.returncode == 0:
+                proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=CLAUDE_DIR)
+                # Poll so we can honour stop_event
+                while proc.poll() is None:
+                    if stop_event.is_set():
+                        proc.terminate()
+                        try:
+                            proc.wait(timeout=5)
+                        except Exception:
+                            proc.kill()
+                        output_queue.put(("stopped", "", None))
+                        return
+                    import time as _time
+                    _time.sleep(0.2)
+                stdout, stderr = proc.communicate()
+                if stop_event.is_set():
+                    output_queue.put(("stopped", "", None))
+                    return
+                if proc.returncode == 0:
                     try:
-                        stdout = result.stdout.strip()
-                        # Try to find a line that's valid JSON with a "result" field
-                        for line in stdout.split('\n'):
+                        text = stdout.strip()
+                        for line in text.split("\n"):
                             line = line.strip()
                             if not line:
                                 continue
@@ -733,8 +753,7 @@ class ClaudeBot:
                                     return
                             except json.JSONDecodeError:
                                 continue
-                        # Fallback: try parsing entire stdout
-                        data = json.loads(stdout)
+                        data = json.loads(text)
                         if isinstance(data, dict):
                             output_queue.put(("success", data.get("result", ""), data.get("session_id")))
                         else:
@@ -742,15 +761,17 @@ class ClaudeBot:
                     except json.JSONDecodeError:
                         output_queue.put(("success", stdout, None))
                 else:
-                    output_queue.put(("error", f"Exit code {result.returncode}: {result.stderr}", None))
+                    output_queue.put(("error", f"Exit code {proc.returncode}: {stderr}", None))
             except Exception as e:
                 output_queue.put(("error", str(e), None))
 
-        thread = threading.Thread(target=run_claude)
+        thread = threading.Thread(target=run_claude, daemon=True)
         thread.start()
+        jid = self._register_job(chat_id, message, stop_event, thread, message_id)
 
         dots = ["⏳", "⌛", "⏳", "⌛"]
         i = 0
+        status = None
         while thread.is_alive():
             try:
                 status = output_queue.get(timeout=0.5)
@@ -758,14 +779,18 @@ class ClaudeBot:
             except queue.Empty:
                 self.api.edit_message(chat_id, message_id, f"{dots[i % 4]} Thinking...")
                 i += 1
-                time.sleep(1)
-        else:
+        if status is None:
             try:
-                status = output_queue.get(timeout=1)
+                status = output_queue.get(timeout=2)
             except queue.Empty:
                 status = ("error", "No output", None)
 
-        thread.join()
+        thread.join(timeout=2)
+        self._unregister_job(jid)
+
+        if status[0] == "stopped":
+            self.api.edit_message(chat_id, message_id, "🛑 Request cancelled.")
+            return "", session_id
 
         if status[0] == "error":
             self.api.edit_message(chat_id, message_id, f"❌ Error: {escape_telegram_markdown(str(status[1]))[:1000]}")
@@ -775,37 +800,24 @@ class ClaudeBot:
         returned_session_id = status[2] if len(status) > 2 else session_id
         full_response = response.strip() if response else "No response"
 
-        # Handle empty response
         if not full_response or full_response == "No response":
             self.api.edit_message(chat_id, message_id, "🤔 No response from Claude")
             return "No response", returned_session_id
 
-        # Check for special response formats BEFORE editing the message
         if full_response.startswith("IMAGE:"):
-            # Delete the "Thinking..." message and send image as new message
             self.api._request("deleteMessage", chat_id=chat_id, message_id=message_id)
             self.route_response(chat_id, full_response)
             return full_response, returned_session_id
 
         if full_response.startswith("VOICE:"):
-            # Delete the "Thinking..." message and send voice as new message
             self.api._request("deleteMessage", chat_id=chat_id, message_id=message_id)
             self.route_response(chat_id, full_response)
             return full_response, returned_session_id
 
-        # Normal text response - edit the "Thinking..." message
-        display_text = format_for_telegram(full_response)
-        display_text = escape_telegram_markdown(display_text)
-        if len(display_text) > 4090:
-            display_text = display_text[:4087] + "..."
-
-        # Try with Markdown first, fallback to plain text
-        result = self.api.edit_message(chat_id, message_id, display_text, parse_mode="MarkdownV2")
-        if not result.get("ok"):
-            # Fallback: send as new message without markdown
-            self.api.send_message(chat_id, full_response[:4000])
-
+        # Send potentially long response in chunks
+        self._send_long_response(chat_id, full_response, edit_message_id=message_id)
         return full_response, returned_session_id
+
 
     def handle_start(self, chat_id: int):
         welcome = """👋 *Welcome to Claude Code Bot!*
@@ -1250,6 +1262,46 @@ Your conversations are persisted and can be resumed anytime.
         elif data == "find_cancel":
             self.handle_sessions(chat_id)
 
+        elif data.startswith("stop_job:"):
+            jid = int(data.split(":", 1)[1])
+            with self._jobs_lock:
+                job = self._jobs.get(jid)
+            if job and job["thread"].is_alive():
+                job["stop_event"].set()
+                self.api.send_message(chat_id, "🛑 Cancelling request\\.\\.\\.")
+            else:
+                self.api.send_message(chat_id, "ℹ️ That request already finished.")
+
+    def handle_stop(self, chat_id: int):
+        with self._jobs_lock:
+            active = {jid: j for jid, j in self._jobs.items() if j["chat_id"] == chat_id and j["thread"].is_alive()}
+        if not active:
+            self.api.send_message(chat_id, "✅ No active requests running.")
+            return
+        keyboard = {"inline_keyboard": [
+            [{"text": f"🛑 {j['preview']}", "callback_data": f"stop_job:{jid}"}]
+            for jid, j in active.items()
+        ]}
+        self.api.send_message(chat_id, "🛑 *Active requests* — tap to cancel:", parse_mode="MarkdownV2", reply_markup=keyboard)
+
+    def _register_job(self, chat_id: int, preview: str, stop_event, thread, message_id=None) -> int:
+        import threading
+        with self._jobs_lock:
+            self._job_counter += 1
+            jid = self._job_counter
+            self._jobs[jid] = {
+                "thread": thread,
+                "stop_event": stop_event,
+                "chat_id": chat_id,
+                "preview": preview[:40],
+                "message_id": message_id,
+            }
+        return jid
+
+    def _unregister_job(self, jid: int):
+        with self._jobs_lock:
+            self._jobs.pop(jid, None)
+
     def handle_message(self, message: dict):
         if not isinstance(message, dict):
             log(f"Invalid message format: {type(message)}")
@@ -1325,18 +1377,32 @@ Your conversations are persisted and can be resumed anytime.
         self.api.send_chat_action(chat_id, "typing")
         session_id = self.get_chat_session(chat_id)
 
-        try:
-            response, returned_session_id = self.call_claude_with_streaming(chat_id, text, session_id)
-            if returned_session_id and returned_session_id != session_id:
-                self.update_session_id(chat_id, session_id, returned_session_id, text)
-            elif returned_session_id:
-                self.update_session_timestamp(chat_id, returned_session_id)
-            # Note: call_claude_with_streaming already handles sending the response
-            # (it edits the "Thinking..." message or routes special formats)
-            # so we don't call route_response() again here
-        except Exception as e:
-            log(f"Error processing message: {e}")
-            self.api.send_message(chat_id, f"❌ Error: {e}")
+        import threading as _threading
+        def _run():
+            try:
+                response, returned_session_id = self.call_claude_with_streaming(chat_id, text, session_id)
+                if returned_session_id and returned_session_id != session_id:
+                    self.update_session_id(chat_id, session_id, returned_session_id, text)
+                elif returned_session_id:
+                    self.update_session_timestamp(chat_id, returned_session_id)
+            except Exception as e:
+                log(f"Error processing message: {e}")
+                self.api.send_message(chat_id, f"❌ Error: {e}")
+        _threading.Thread(target=_run, daemon=True).start()
+
+    def _send_long_response(self, chat_id: int, text: str, edit_message_id: Optional[int] = None):
+        """Send text, splitting into multiple messages if over Telegram limit."""
+        chunks = truncate_for_telegram(text, max_length=4000)
+        for idx, chunk in enumerate(chunks):
+            display = escape_telegram_markdown(format_for_telegram(chunk))
+            if idx == 0 and edit_message_id:
+                result = self.api.edit_message(chat_id, edit_message_id, display, parse_mode="MarkdownV2")
+                if not result.get("ok"):
+                    self.api.send_message(chat_id, chunk[:4000])
+            else:
+                result = self.api.send_message(chat_id, display, parse_mode="MarkdownV2")
+                if not result.get("ok"):
+                    self.api.send_message(chat_id, chunk[:4000])
 
     def route_response(self, chat_id: int, response: str):
         """Route Claude's response based on format prefixes."""
