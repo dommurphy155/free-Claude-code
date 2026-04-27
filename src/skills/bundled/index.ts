@@ -22,7 +22,6 @@ export function initBundledSkills(): void {
   require('./simplify.js').registerSimplifySkill()
   require('./batch.js').registerBatchSkill()
   require('./stuck.js').registerStuckSkill()
-  require('./browser.js').registerBrowserSkill()
   require('./webresearch.js').registerWebResearchSkill()
   require('./promptplus.js').registerPromptPlusSkill()
   require('./cron.js').registerCronSkill()
