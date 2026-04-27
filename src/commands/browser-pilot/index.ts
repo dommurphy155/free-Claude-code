@@ -4,7 +4,6 @@ import { getIsNonInteractiveSession } from '../../bootstrap/state.js'
 const command: Command = {
   name: 'browser',
   description: 'Browser automation with Chrome DevTools Protocol',
-  availability: ['claude-ai'],
   isEnabled: () => !getIsNonInteractiveSession(),
   type: 'prompt',
   async getPromptForCommand(args: string) {
