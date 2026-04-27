@@ -871,7 +871,8 @@ export class DaemonServer {
 }
 
 // Start daemon if run directly
-if (require.main === module) {
+const isMainModule = import.meta.url === `file://${process.argv[1]}`;
+if (isMainModule) {
   const daemon = new DaemonServer();
   daemon.start().catch((error) => {
     logger.error('Failed to start daemon', error);

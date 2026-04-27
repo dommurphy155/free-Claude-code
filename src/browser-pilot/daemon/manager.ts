@@ -70,11 +70,11 @@ export class DaemonManager {
       console.log('🚀 Starting Browser Pilot Daemon...');
     }
 
-    // Get path to server.js (compiled output)
-    const serverPath = join(__dirname, 'server.js');
+    // Get path to server.ts (TypeScript source, run with bun)
+    const serverPath = join(__dirname, 'server.ts');
 
     if (!existsSync(serverPath)) {
-      throw new Error(`Daemon server not found at ${serverPath}. Did you run 'npm run build'?`);
+      throw new Error(`Daemon server not found at ${serverPath}. Is browser-pilot installed correctly?`);
     }
 
     // Try starting with retry logic
@@ -85,6 +85,10 @@ export class DaemonManager {
       try {
         // Prepare environment variables
         const env = { ...process.env };
+      // Ensure CLAUDE_PROJECT_DIR is set
+      if (!env.CLAUDE_PROJECT_DIR) {
+        env.CLAUDE_PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+      }
         if (initialUrl) {
           env.BP_INITIAL_URL = initialUrl;
           if (verbose && attempt === 1) {
@@ -93,7 +97,7 @@ export class DaemonManager {
         }
 
         // Spawn daemon as detached process
-        const daemon: ChildProcess = spawn(process.execPath, [serverPath], {
+        const daemon: ChildProcess = spawn('bun', ['run', serverPath], {
           detached: true,
           stdio: 'ignore', // Don't inherit stdio
           cwd: process.cwd(),
@@ -146,11 +150,15 @@ export class DaemonManager {
             }
 
             const env = { ...process.env };
+      // Ensure CLAUDE_PROJECT_DIR is set
+      if (!env.CLAUDE_PROJECT_DIR) {
+        env.CLAUDE_PROJECT_DIR = process.env.CLAUDE_PROJECT_DIR || process.cwd();
+      }
             if (initialUrl) {
               env.BP_INITIAL_URL = initialUrl;
             }
 
-            const daemon: ChildProcess = spawn(process.execPath, [serverPath], {
+            const daemon: ChildProcess = spawn('bun', ['run', serverPath], {
               detached: true,
               stdio: 'ignore',
               cwd: process.cwd(),

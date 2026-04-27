@@ -179,10 +179,11 @@ export const IDLE_SHUTDOWN_TIMEOUT = 1800000; // 30 minutes
  * Get project-specific socket name
  * Uses project folder name + path hash to create unique socket for each project
  */
+import { basename } from 'path';
+import { createHash } from 'crypto';
+import { findProjectRoot } from '../cdp/utils.js';
+
 export function getProjectSocketName(): string {
-  const { basename } = require('path');
-  const { findProjectRoot } = require('../cdp/utils');
-  const { createHash } = require('crypto');
 
   const projectRoot = findProjectRoot();
   const projectName = basename(projectRoot)

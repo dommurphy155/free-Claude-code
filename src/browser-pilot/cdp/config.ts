@@ -48,17 +48,7 @@ function getLocalTimestamp(): string {
 function getSharedConfigPath(): string {
   const { homedir } = require('os');
   const homeDir = homedir();
-  return join(
-    homeDir,
-    '.claude',
-    'plugins',
-    'marketplaces',
-    'dev-gom-plugins',
-    'plugins',
-    'browser-pilot',
-    'skills',
-    'browser-pilot-config.json'
-  );
+  return join(homeDir, '.claude', 'browser-pilot', 'config.json');
 }
 
 /**
