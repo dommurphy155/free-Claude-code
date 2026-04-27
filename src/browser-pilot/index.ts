@@ -38,4 +38,4 @@ export { logger } from './utils/logger';
 export * as constants from './constants';
 
 // Main entry point for CLI usage
-export { runBrowserPilot } from './cli/cli';
+export { runCLI as runBrowserPilot } from './cli/cli';

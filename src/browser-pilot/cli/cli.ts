@@ -55,4 +55,11 @@ registerAccessibilityCommands(program);
 registerQueryCommands(program); // Query interaction map
 
 // Parse command line arguments
-program.parse();
+export function runCLI(argv?: string[]): void {
+  program.parse(argv);
+}
+
+// Auto-run if called directly
+if (import.meta.url === `file://${process.argv[1]}`) {
+  runCLI();
+}
