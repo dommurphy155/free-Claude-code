@@ -926,7 +926,7 @@ Your conversations are persisted and can be resumed anytime.
             "claude", "-p", "--dangerously-skip-permissions",
             "--output-format", "json",
             "--resume", session_id,
-            "hi",
+            "hi reply 1 word 'hello'",
         ]
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, cwd=CLAUDE_DIR, timeout=30)
