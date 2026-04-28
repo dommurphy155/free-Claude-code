@@ -113,7 +113,7 @@ def convert_messages(body):
                     "content": "\n".join(text_parts) if text_parts else None,
                     "tool_calls": [
                         {
-                            "id": tu.get("id", "call_0"),
+                            "id": tu.get("id") or f'call_{uuid.uuid4().hex[:8]}',
                             "type": "function",
                             "function": {
                                 "name": tu.get("name", ""),
@@ -132,7 +132,7 @@ def convert_messages(body):
                         tr_content = "\n".join(b.get("text", "") for b in tr_content if isinstance(b, dict))
                     msgs.append({
                         "role": "tool",
-                        "tool_call_id": tr.get("tool_use_id", "call_0"),
+                        "tool_call_id": tr.get("tool_use_id") or f'call_{uuid.uuid4().hex[:8]}',
                         "content": tr_content
                     })
                 if text_parts:
