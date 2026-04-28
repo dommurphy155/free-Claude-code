@@ -1,5 +1,4 @@
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
-import chalk from 'chalk';
 import { c as _c } from "react/compiler-runtime";
 // biome-ignore-all assist/source/organizeImports: ANT-ONLY import markers must not be reordered
 import * as React from 'react';
@@ -252,7 +251,7 @@ export function LogoV2() {
     }
     const layoutMode = getLayoutMode(columns);
     const userTheme = resolveThemeSetting(getGlobalConfig().theme);
-    const borderTitle = ` ${color("#DC143C", userTheme)(chalk.bold("JAILBROKE CLAUDE"))} `;
+    const borderTitle = ` ${color("red", userTheme)("JAILBROKE CLAUDE")} `;
     const compactBorderTitle = color("red", userTheme)(" JAILBROKE CLAUDE ");
     if (layoutMode === "compact") {
         let welcomeMessage = formatWelcomeMessage(username);

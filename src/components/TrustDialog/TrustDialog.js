@@ -210,7 +210,7 @@ export function TrustDialog(t0) {
     let t17;
     let t18;
     if ($[20] === Symbol.for("react.memo_cache_sentinel")) {
-        t16 = _jsx(Text, { bold: true, children: getFsImplementation().cwd() });
+        t16 = _jsx(Text, { bold: true, children: getCwd() });
         t17 = _jsxs(Text, { children: ["Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source project, or work from your team). If not, take a moment to review what", "'", "s in this folder first."] });
         t18 = _jsxs(Text, { children: ["Claude Code", "'", "ll be able to read, edit, and execute files here."] });
         $[20] = t16;
