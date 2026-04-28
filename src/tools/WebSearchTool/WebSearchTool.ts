@@ -2,8 +2,8 @@ import type {
   BetaContentBlock,
   BetaWebSearchTool20250305,
 } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
-import { getAPIProvider } from 'src/utils/model/providers.js'
-import type { PermissionResult } from 'src/utils/permissions/PermissionResult.js'
+import { getAPIProvider } from '../../utils/model/providers.js'
+import type { PermissionResult } from '../../utils/permissions/PermissionResult.js'
 import { z } from 'zod/v4'
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../../services/analytics/growthbook.js'
 import { queryModelWithStreaming } from '../../services/api/claude.js'
@@ -264,7 +264,7 @@ export const WebSearchTool = buildTool({
     const startTime = performance.now()
     const { query, depth = 'standard' } = input
 
-    // Phase 1: Search using SearXNG Python module
+    // Phase 1: Search using SearXNG HTTP API
     onProgress?.({
       type: 'web_search',
       query,
@@ -274,17 +274,32 @@ export const WebSearchTool = buildTool({
 
     console.error('[WEBSEARCH] Query:', query)
 
-    // Call searxng.py Python module
+    // Call SearXNG via HTTP API
+    const searxngUrl = `http://localhost:8888/search?q=${encodeURIComponent(query)}&format=json`
     let searchData: any = { results: [], num_results: 0 }
+
     try {
-      const { stdout } = await execa('python3', [
-        '-c',
-        `import asyncio; import sys; sys.path.insert(0, '${process.env.HOME}/claude-code-haha'); from searxng import search; print(asyncio.run(search('${query.replace(/'/g, "\\'")}', max_results=15, depth='${depth}')))`
-      ], { timeout: 30000 })
-      searchData = JSON.parse(stdout)
+      const resp = await fetch(searxngUrl, {
+        signal: context.abortController.signal,
+        headers: { 'Accept': 'application/json' }
+      })
+
+      if (resp.ok) {
+        const data = await resp.json()
+        searchData = {
+          results: (data.results || []).map((r: any) => ({
+            title: r.title || '',
+            url: r.url || r.link || '',
+            snippet: r.content || r.snippet || '',
+            score: r.score || 0
+          })),
+          num_results: data.results?.length || 0
+        }
+      } else {
+        console.error('[WEBSEARCH] SearXNG returned:', resp.status)
+      }
     } catch (e) {
       console.error('[WEBSEARCH] SearXNG search failed:', e)
-      // Fallback: return empty results
     }
 
     const results = searchData.results || []
