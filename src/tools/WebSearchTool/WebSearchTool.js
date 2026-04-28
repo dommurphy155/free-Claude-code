@@ -7,7 +7,6 @@ import { getMainLoopModel } from '../../utils/model/model.js';
 import { jsonStringify } from '../../utils/slowOperations.js';
 import { getWebSearchPrompt, WEB_SEARCH_TOOL_NAME } from './prompt.js';
 import { getToolUseSummary, renderToolResultMessage, renderToolUseMessage, renderToolUseProgressMessage, } from './UI.js';
-import { execa } from 'execa';
 
 const inputSchema = lazySchema(() => z.strictObject({
     query: z.string().min(2).describe('The search query to use'),
@@ -49,57 +48,7 @@ function makeToolSchema(input) {
         name: 'web_search',
         allowed_domains: input.allowed_domains,
         blocked_domains: input.blocked_domains,
-        max_uses: 8, // Hardcoded to 8 searches maximum
-    };
-}
-function makeOutputFromSearchResponse(result, query, durationSeconds) {
-    const results = [];
-    let textAcc = '';
-    let inText = true;
-    for (const block of result) {
-        if (!block) {
-            continue;
-        }
-        if (block.type === 'server_tool_use') {
-            if (inText) {
-                inText = false;
-                if (textAcc.trim().length > 0) {
-                    results.push(textAcc.trim());
-                }
-                textAcc = '';
-            }
-            continue;
-        }
-        if (block.type === 'web_search_tool_result') {
-            if (!Array.isArray(block.content)) {
-                const errorMessage = `Web search error: ${block.content.error_code}`;
-                logError(new Error(errorMessage));
-                results.push(errorMessage);
-                continue;
-            }
-            const hits = block.content.map(r => ({ title: r.title, url: r.url }));
-            results.push({
-                tool_use_id: block.tool_use_id,
-                content: hits,
-            });
-        }
-        if (block.type === 'text') {
-            if (inText) {
-                textAcc += block.text;
-            }
-            else {
-                inText = true;
-                textAcc = block.text;
-            }
-        }
-    }
-    if (textAcc.length) {
-        results.push(textAcc.trim());
-    }
-    return {
-        query,
-        results,
-        durationSeconds,
+        max_uses: 8,
     };
 }
 export const WebSearchTool = buildTool({
@@ -195,7 +144,7 @@ export const WebSearchTool = buildTool({
         const startTime = performance.now();
         const { query, depth = 'standard' } = input;
 
-        // Phase 1: Search using SearXNG Python module
+        // Phase 1: Search using SearXNG
         onProgress?.({
             type: 'web_search',
             query,
@@ -205,15 +154,30 @@ export const WebSearchTool = buildTool({
 
         console.error('[WEBSEARCH] Query:', query);
 
-        // Call searxng.py Python module
+        // Call SearXNG via HTTP API
+        const searxngUrl = `http://localhost:8080/search?q=${encodeURIComponent(query)}&format=json`;
         let searchData = { results: [], num_results: 0 };
+
         try {
-            const homeDir = process.env.HOME || '/root';
-            const { stdout } = await execa('python3', [
-                '-c',
-                `import asyncio; import sys; sys.path.insert(0, '${homeDir}/claude-code-haha'); from searxng import search; print(asyncio.run(search('${query.replace(/'/g, "\\'")}', max_results=15, depth='${depth}')))`
-            ], { timeout: 30000 });
-            searchData = JSON.parse(stdout);
+            const resp = await fetch(searxngUrl, {
+                signal: context.abortController.signal,
+                headers: { 'Accept': 'application/json' }
+            });
+
+            if (resp.ok) {
+                const data = await resp.json();
+                searchData = {
+                    results: (data.results || []).map((r) => ({
+                        title: r.title || '',
+                        url: r.url || r.link || '',
+                        snippet: r.content || r.snippet || '',
+                        score: r.score || 0
+                    })),
+                    num_results: data.results?.length || 0
+                };
+            } else {
+                console.error('[WEBSEARCH] SearXNG returned:', resp.status);
+            }
         } catch (e) {
             console.error('[WEBSEARCH] SearXNG search failed:', e);
         }
@@ -230,7 +194,7 @@ export const WebSearchTool = buildTool({
             message: `Found ${resultCount} results. Fetching top sources...`,
         });
 
-        // Phase 2: Auto-select top 3 URLs by score
+        // Phase 2: Auto-select top 3 URLs
         const topUrls = results
             .sort((a, b) => (b.score || 0) - (a.score || 0))
             .slice(0, 3)
@@ -250,7 +214,6 @@ export const WebSearchTool = buildTool({
             });
 
             try {
-                // Import WebFetchTool dynamically to avoid circular dependency
                 const { WebFetchTool } = await import('../WebFetchTool/WebFetchTool.js');
                 const fetchPromises = topUrls.map(async (url) => {
                     try {
@@ -266,7 +229,6 @@ export const WebSearchTool = buildTool({
 
                 const fetchData = await Promise.all(fetchPromises);
 
-                // Build fetch results summary
                 const fetchResults_list = [];
                 for (const r of fetchData) {
                     if (r.success && r.content) {
@@ -288,7 +250,6 @@ export const WebSearchTool = buildTool({
 
         const endTime = performance.now();
 
-        // Combine everything
         const searchText = JSON.stringify(searchData, null, 2);
         const combinedResults = `SEARCH RESULTS:\n\n${searchText}\n\n---\n\nFETCHED CONTENT:\n\n${fetchResults}`;
 

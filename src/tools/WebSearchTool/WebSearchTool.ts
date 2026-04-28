@@ -21,7 +21,6 @@ import {
   renderToolUseMessage,
   renderToolUseProgressMessage,
 } from './UI.js'
-import { execa } from 'execa'
 
 const inputSchema = lazySchema(() =>
   z.strictObject({
