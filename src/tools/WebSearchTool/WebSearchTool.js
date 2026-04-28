@@ -155,7 +155,7 @@ export const WebSearchTool = buildTool({
         console.error('[WEBSEARCH] Query:', query);
 
         // Call SearXNG via HTTP API
-        const searxngUrl = `http://localhost:8080/search?q=${encodeURIComponent(query)}&format=json`;
+        const searxngUrl = `http://localhost:8888/search?q=${encodeURIComponent(query)}&format=json`;
         let searchData = { results: [], num_results: 0 };
 
         try {

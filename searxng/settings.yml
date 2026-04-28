@@ -7,3 +7,5 @@ search:
   formats:
     - html
     - json
+search:
+  autocomplete: ''
