@@ -216,7 +216,7 @@ async def messages(request: Request):
                             try:
                                 chunk = json.loads(data)
                                 delta = chunk["choices"][0].get("delta", {}) or {}
-                                text = delta.get("content") or delta.get("reasoning") or delta.get("reasoning_content") or ""
+                                text = delta.get("content") or ""
                                 if text:
                                     full_content += text
                                     yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'text_delta', 'text': text}})}\n\n"
