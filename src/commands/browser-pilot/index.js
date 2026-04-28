@@ -1,71 +1,85 @@
 import { getIsNonInteractiveSession } from '../../bootstrap/state.js';
+import { spawn } from 'child_process';
+import { join } from 'path';
+const BP_PATH = join(process.cwd(), '.browser-pilot', 'bp.js');
+async function runBrowserPilot(args) {
+    return new Promise((resolve) => {
+        const proc = spawn('node', [BP_PATH, ...args], {
+            cwd: process.cwd(),
+            stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        let stdout = '';
+        let stderr = '';
+        proc.stdout?.on('data', (data) => {
+            stdout += data.toString();
+        });
+        proc.stderr?.on('data', (data) => {
+            stderr += data.toString();
+        });
+        proc.on('close', (code) => {
+            resolve({ stdout, stderr, exitCode: code ?? 0 });
+        });
+    });
+}
+function parseBrowserArgs(input) {
+    const args = input.trim().split(/\s+/);
+    // If no subcommand provided, default to navigate
+    if (args.length === 0 || (!args[0].startsWith('-') && !isSubcommand(args[0]))) {
+        // Check if it's a URL
+        const maybeUrl = args[0] || input.trim();
+        if (maybeUrl && (maybeUrl.startsWith('http://') || maybeUrl.startsWith('https://'))) {
+            return ['navigate', '-u', maybeUrl];
+        }
+        return ['navigate', '-u', maybeUrl];
+    }
+    return args;
+}
+function isSubcommand(arg) {
+    const subcommands = [
+        'navigate', 'click', 'fill', 'type', 'press', 'extract',
+        'screenshot', 'chain', 'daemon-start', 'daemon-stop', 'daemon-status', '--help'
+    ];
+    return subcommands.includes(arg);
+}
 const command = {
     name: 'browser',
     description: 'Browser automation with Chrome DevTools Protocol',
     isEnabled: () => !getIsNonInteractiveSession(),
-    type: 'prompt',
-    async getPromptForCommand(args) {
-        return [
-            {
-                type: 'text',
-                text: `Browser Pilot - Chrome DevTools Protocol Automation
-
-Use the browser_task tool for browser automation.
-
-## Quick Commands
-
-Navigate to a URL:
-\`\`\`bash
-node .browser-pilot/bp.js navigate -u <url>
-\`\`\`
-
-Click an element:
-\`\`\`bash
-node .browser-pilot/bp.js click --text "Login"
-\`\`\`
-
-Fill a form:
-\`\`\`bash
-node .browser-pilot/bp.js fill --text "Email" -v "user@example.com"
-\`\`\`
-
-Take a screenshot:
-\`\`\`bash
-node .browser-pilot/bp.js screenshot -o screenshot.png
-\`\`\`
-
-Chain multiple commands:
-\`\`\`bash
-node .browser-pilot/bp.js chain navigate -u <url> click --text "Submit"
-\`\`\`
-
-## Daemon Management
-
-Start daemon:
-\`\`\`bash
-node .browser-pilot/bp.js daemon-start
-\`\`\`
-
-Stop daemon:
-\`\`\`bash
-node .browser-pilot/bp.js daemon-stop
-\`\`\`
-
-Check status:
-\`\`\`bash
-node .browser-pilot/bp.js daemon-status
-\`\`\`
-
-For detailed help:
-\`\`\`bash
-node .browser-pilot/bp.js --help
-\`\`\`
-
-User request: ${args || 'No specific task provided'}
-
-Execute the appropriate browser command based on the user's request.`,
-            },
-        ];
+    type: 'local',
+    async execute(args, context) {
+        const parsedArgs = parseBrowserArgs(args);
+        // Show help if no args or --help
+        if (!args.trim() || args.trim() === '--help' || args.trim() === '-h') {
+            const result = await runBrowserPilot(['--help']);
+            return {
+                output: result.stdout || result.stderr,
+                render: 'text',
+            };
+        }
+        // Execute the browser-pilot command
+        const result = await runBrowserPilot(parsedArgs);
+        if (result.exitCode !== 0) {
+            return {
+                output: `Browser Pilot error (exit ${result.exitCode}):\n${result.stderr || result.stdout}`,
+                render: 'text',
+            };
+        }
+        // Handle screenshot output
+        if (parsedArgs[0] === 'screenshot' || parsedArgs.includes('screenshot')) {
+            // Extract screenshot path if provided
+            const outputIndex = parsedArgs.indexOf('-o');
+            const screenshotPath = outputIndex !== -1 && outputIndex + 1 < parsedArgs.length
+                ? parsedArgs[outputIndex + 1]
+                : '/root/claude-code-haha/.browser-pilot/screenshots/tmp/browser-screenshot.png';
+            return {
+                output: `${result.stdout}\nScreenshot saved to: ${screenshotPath}`,
+                render: 'text',
+            };
+        }
+        return {
+            output: result.stdout || 'Command executed successfully',
+            render: 'text',
+        };
     },
 };
 export default command;
