@@ -283,7 +283,9 @@ export function getProjectsDir() {
     return join(getClaudeConfigHomeDir(), 'projects');
 }
 export function getProjectDir(projectDir) {
-    return join(getProjectsDir(), sanitizePath(projectDir));
+    // Always store sessions under /root so all sessions appear in one place
+    const homeDir = (typeof process !== 'undefined' && process.env.HOME) ? process.env.HOME : '/root';
+    return join(getProjectsDir(), sanitizePath(homeDir));
 }
 /**
  * Resolves a directory path to its canonical form using realpath + NFC
