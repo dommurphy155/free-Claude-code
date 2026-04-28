@@ -206,8 +206,14 @@ async def messages(request: Request):
                 try:
                     async with http_client.stream("POST", api_url, json=openai_body, headers=headers,
                                                    timeout=httpx.Timeout(600.0)) as resp:
-                        async for line in resp.aiter_lines():
-                            if line.startswith("data: "):
+                        buf = ""
+                        async for raw in resp.aiter_text():
+                            buf += raw
+                            while "\n" in buf:
+                                line, buf = buf.split("\n", 1)
+                                line = line.strip()
+                                if not line.startswith("data: "):
+                                    continue
                                 data = line[6:]
                                 if data == "[DONE]":
                                     break
