@@ -43,20 +43,23 @@ function runBrowserPilot(args) {
 function parseArgs(input) {
   const trimmed = input.trim();
 
-  // If it's a URL, default to navigate
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    return `navigate -u "${trimmed}"`;
+  // Extract just the URL if present (first word that looks like a URL)
+  const words = trimmed.split(/\s+/);
+  const urlWord = words.find(w => w.startsWith('http://') || w.startsWith('https://'));
+
+  if (urlWord) {
+    return `navigate -u "${urlWord}"`;
   }
 
   // If it starts with a subcommand, pass through
   const subcommands = ['navigate', 'click', 'fill', 'type', 'press', 'extract', 'screenshot', 'chain'];
-  const firstWord = trimmed.split(/\s+/)[0];
+  const firstWord = words[0];
   if (subcommands.includes(firstWord)) {
     return trimmed;
   }
 
-  // Default to navigate
-  return `navigate -u "${trimmed}"`;
+  // Default: pass through as-is
+  return trimmed;
 }
 
 export function registerBrowserPilotSkill() {
