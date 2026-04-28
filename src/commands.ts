@@ -149,7 +149,6 @@ import perfIssue from './commands/perf-issue/index.js'
 import sandboxToggle from './commands/sandbox-toggle/index.js'
 import chrome from './commands/chrome/index.js'
 import browser from './commands/browser-pilot/index.js'
-import webresearch from './commands/webresearch/index.js'
 import stickers from './commands/stickers/index.js'
 import advisor from './commands/advisor.js'
 import { logError } from './utils/log.js'
@@ -320,7 +319,6 @@ const COMMANDS = memoize((): Command[] => [
   usage,
   usageReport,
   vim,
-  webresearch,
   ...(webCmd ? [webCmd] : []),
   ...(forkCmd ? [forkCmd] : []),
   ...(buddy ? [buddy] : []),
