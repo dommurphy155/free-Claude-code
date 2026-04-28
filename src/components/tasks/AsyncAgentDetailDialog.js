@@ -168,7 +168,7 @@ export function AsyncAgentDetailDialog(t0) {
     }
     let t15;
     if ($[31] !== agent.progress || $[32] !== agent.status || $[33] !== theme) {
-        t15 = agent.status === "running" && agent.progress?.recentActivities && agent.progress.recentActivities.length > 0 && _jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { bold: true, dimColor: true, children: "Progress" }), agent.progress.recentActivities.map((activity, i) => _jsxs(Text, { dimColor: i < agent.progress.recentActivities.length - 1, wrap: "truncate-end", children: [i === agent.progress.recentActivities.length - 1 ? "\u203A " : "  ", renderToolActivity(activity, tools, theme)] }, i))] });
+        t15 = agent.status === "running" && agent.progress?.recentActivities && agent.progress.recentActivities.length > 0 && _jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { bold: true, dimColor: true, children: "Progress" }), agent.progress.recentActivities.map((activity, i) => _jsxs(Text, { dimColor: i < agent.progress.recentActivities.length - 1, wrap: "wrap", children: [i === agent.progress.recentActivities.length - 1 ? "\u203A " : "  ", renderToolActivity(activity, tools, theme)] }, i))] });
         $[31] = agent.progress;
         $[32] = agent.status;
         $[33] = theme;

@@ -210,7 +210,7 @@ export function InProcessTeammateDetailDialog(t0) {
     }
     let t17;
     if ($[42] !== teammate.progress || $[43] !== teammate.status || $[44] !== theme) {
-        t17 = teammate.status === "running" && teammate.progress?.recentActivities && teammate.progress.recentActivities.length > 0 && _jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { bold: true, dimColor: true, children: "Progress" }), teammate.progress.recentActivities.map((activity_0, i) => _jsxs(Text, { dimColor: i < teammate.progress.recentActivities.length - 1, wrap: "truncate-end", children: [i === teammate.progress.recentActivities.length - 1 ? "\u203A " : "  ", renderToolActivity(activity_0, tools, theme)] }, i))] });
+        t17 = teammate.status === "running" && teammate.progress?.recentActivities && teammate.progress.recentActivities.length > 0 && _jsxs(Box, { flexDirection: "column", children: [_jsx(Text, { bold: true, dimColor: true, children: "Progress" }), teammate.progress.recentActivities.map((activity_0, i) => _jsxs(Text, { dimColor: i < teammate.progress.recentActivities.length - 1, wrap: "wrap", children: [i === teammate.progress.recentActivities.length - 1 ? "\u203A " : "  ", renderToolActivity(activity_0, tools, theme)] }, i))] });
         $[42] = teammate.progress;
         $[43] = teammate.status;
         $[44] = theme;
