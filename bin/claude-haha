@@ -2,7 +2,6 @@
 set -euo pipefail
 
 ROOT_DIR="$HOME/claude-code-haha"
-cd "$ROOT_DIR"
 
 # Find bun
 BUN="$HOME/.bun/bin/bun"
@@ -10,10 +9,14 @@ if [ ! -x "$BUN" ]; then
     BUN="$(which bun 2>/dev/null || echo bun)"
 fi
 
-# Force recovery CLI (simple readline REPL, no Ink TUI)
+# Save launch dir before cd-ing into source
+export CLAUDE_LAUNCH_DIR="${CLAUDE_LAUNCH_DIR:-$(pwd)}"
+
+cd "$ROOT_DIR"
+
+# Force recovery CLI
 if [[ "${CLAUDE_CODE_FORCE_RECOVERY_CLI:-0}" == "1" ]]; then
     exec "$BUN" --env-file="$ROOT_DIR/.env" "$ROOT_DIR/src/localRecoveryCli.ts" --dangerously-skip-permissions "$@"
 fi
 
-# Default: full CLI with Ink TUI
 exec "$BUN" --env-file="$ROOT_DIR/.env" "$ROOT_DIR/src/entrypoints/cli.tsx" --dangerously-skip-permissions "$@"

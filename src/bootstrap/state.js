@@ -17,7 +17,7 @@ function getInitialState() {
     if (typeof process !== 'undefined' &&
         typeof process.cwd === 'function' &&
         typeof realpathSync === 'function') {
-        const rawCwd = cwd();
+        const rawCwd = process.env.CLAUDE_LAUNCH_DIR || cwd();
         try {
             resolvedCwd = realpathSync(rawCwd).normalize('NFC');
         }
