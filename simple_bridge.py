@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 """
 Claude Code Simple Bridge
@@ -69,7 +70,6 @@ async def lifespan(app: FastAPI):
         timeout=httpx.Timeout(300.0, connect=10.0, read=120.0, write=30.0, pool=60.0),
         limits=httpx.Limits(max_connections=200, max_keepalive_connections=50),
         follow_redirects=True,
-
     )
     print("[BRIDGE] HTTP client started", file=sys.stderr, flush=True)
     try:
@@ -86,7 +86,7 @@ app = FastAPI(lifespan=lifespan)
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "keymaster": KEYMASTER_URL, "version": "2.0.0-clean"}
+    return {"status": "ok", "keymaster": KEYMASTER_URL, "version": "2.1.0"}
 
 
 def convert_messages(body):
@@ -206,44 +206,40 @@ async def messages(request: Request):
                 try:
                     async with http_client.stream("POST", api_url, json=openai_body, headers=headers,
                                                    timeout=httpx.Timeout(600.0)) as resp:
-                        buf = ""
-                        async for raw in resp.aiter_text():
-                            buf += raw
-                            while "\n" in buf:
-                                line, buf = buf.split("\n", 1)
-                                line = line.strip()
-                                if not line.startswith("data: "):
-                                    continue
-                                data = line[6:]
-                                if data == "[DONE]":
-                                    break
-                                try:
-                                    chunk = json.loads(data)
-                                    delta = chunk["choices"][0].get("delta", {}) or {}
-                                    text = delta.get("content") or delta.get("reasoning") or delta.get("reasoning_content") or ""
-                                    if text:
-                                        full_content += text
-                                        yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'text_delta', 'text': text}})}\n\n"
-                                    for tc in delta.get("tool_calls", []) or []:
-                                        idx = tc.get("index", 0)
-                                        if idx not in tool_call_chunks:
-                                            tool_call_chunks[idx] = {"id": tc.get("id", f"call_{idx}"), "name": "", "arguments": ""}
-                                            yield f"event: content_block_start\ndata: " + json.dumps({"type": "content_block_start", "index": idx + 1, "content_block": {"type": "tool_use", "id": tool_call_chunks[idx]["id"], "name": tc.get("function", {}).get("name", ""), "input": {}}}) + "\n\n"
-                                        if tc.get("function", {}).get("name"):
-                                            tool_call_chunks[idx]["name"] += tc["function"]["name"]
-                                        if tc.get("function", {}).get("arguments"):
-                                            tool_call_chunks[idx]["arguments"] += tc["function"]["arguments"]
-                                            yield f"event: content_block_delta\ndata: " + json.dumps({"type": "content_block_delta", "index": idx + 1, "delta": {"type": "input_json_delta", "partial_json": tc["function"]["arguments"]}}) + "\n\n"
-                                except Exception:
-                                    pass
+                        async for line in resp.aiter_lines():
+                            line = line.strip()
+                            if not line.startswith("data: "):
+                                continue
+                            data = line[6:]
+                            if data == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(data)
+                                delta = chunk["choices"][0].get("delta", {}) or {}
+                                text = delta.get("content") or delta.get("reasoning") or delta.get("reasoning_content") or ""
+                                if text:
+                                    full_content += text
+                                    yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'text_delta', 'text': text}})}\n\n"
+                                for tc in delta.get("tool_calls", []) or []:
+                                    idx = tc.get("index", 0)
+                                    if idx not in tool_call_chunks:
+                                        tool_call_chunks[idx] = {"id": tc.get("id", f"call_{idx}"), "name": "", "arguments": ""}
+                                        yield f"event: content_block_start\ndata: {json.dumps({'type': 'content_block_start', 'index': idx + 1, 'content_block': {'type': 'tool_use', 'id': tool_call_chunks[idx]['id'], 'name': tc.get('function', {}).get('name', ''), 'input': {}}})}\n\n"
+                                    if tc.get("function", {}).get("name"):
+                                        tool_call_chunks[idx]["name"] += tc["function"]["name"]
+                                    if tc.get("function", {}).get("arguments"):
+                                        tool_call_chunks[idx]["arguments"] += tc["function"]["arguments"]
+                                        yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': idx + 1, 'delta': {'type': 'input_json_delta', 'partial_json': tc['function']['arguments']}})}\n\n"
+                            except Exception:
+                                pass
                 except Exception as e:
                     print(f"[BRIDGE:{request_id}] Stream error: {e}", file=sys.stderr)
 
-                yield f"event: content_block_stop\ndata: " + json.dumps({"type": "content_block_stop", "index": 0}) + "\n\n"
+                yield f"event: content_block_stop\ndata: {json.dumps({'type': 'content_block_stop', 'index': 0})}\n\n"
 
                 if tool_call_chunks:
                     for idx in tool_call_chunks:
-                        yield f"event: content_block_stop\ndata: " + json.dumps({"type": "content_block_stop", "index": idx + 1}) + "\n\n"
+                        yield f"event: content_block_stop\ndata: {json.dumps({'type': 'content_block_stop', 'index': idx + 1})}\n\n"
                     stop_reason = "tool_use"
                 else:
                     stop_reason = "end_turn"
