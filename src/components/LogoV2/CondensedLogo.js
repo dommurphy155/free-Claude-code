@@ -81,7 +81,7 @@ export function CondensedLogo() {
     }
     let t5;
     if ($[8] === Symbol.for("react.memo_cache_sentinel")) {
-        t5 = _jsx(Text, { bold: true, children: "Claude Code" });
+        t5 = _jsx(Text, { bold: true, color: "error", children: "JAILBROKE CLAUDE" });
         $[8] = t5;
     }
     else {

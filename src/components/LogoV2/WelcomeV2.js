@@ -30,7 +30,7 @@ export function WelcomeV2() {
         let t7;
         let t8;
         if ($[2] === Symbol.for("react.memo_cache_sentinel")) {
-            t0 = _jsxs(Text, { children: [_jsxs(Text, { bold: true, color: "red", children: ["JAILBROKE CLAUDE", " "] })] });
+            t0 = _jsxs(Text, { children: [_jsxs(Text, { bold: true, color: "error", children: ["JAILBROKE CLAUDE", " "] })] });
             t1 = _jsx(Text, { children: "\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026" });
             t2 = _jsx(Text, { children: "                                                          " });
             t3 = _jsx(Text, { children: "                                                          " });
@@ -122,7 +122,7 @@ export function WelcomeV2() {
     let t5;
     let t6;
     if ($[18] === Symbol.for("react.memo_cache_sentinel")) {
-        t0 = _jsxs(Text, { children: [_jsxs(Text, { bold: true, color: "red", children: ["JAILBROKE CLAUDE", " "] })] });
+        t0 = _jsxs(Text, { children: [_jsxs(Text, { bold: true, color: "error", children: ["JAILBROKE CLAUDE", " "] })] });
         t1 = _jsx(Text, { children: "\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026\u2026" });
         t2 = _jsx(Text, { children: "                                                          " });
         t3 = _jsx(Text, { children: "     *                                       \u2588\u2588\u2588\u2588\u2588\u2593\u2593\u2591     " });
