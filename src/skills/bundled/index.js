@@ -21,7 +21,7 @@ export function initBundledSkills() {
     require('./simplify.js').registerSimplifySkill();
     require('./batch.js').registerBatchSkill();
     require('./stuck.js').registerStuckSkill();
-    // Browser pilot skill removed - using command instead
+    require('./browser-pilot.js').registerBrowserPilotSkill();
     require('./webresearch.js').registerWebResearchSkill();
     require('./promptplus.js').registerPromptPlusSkill();
     require('./cron.js').registerCronSkill();
