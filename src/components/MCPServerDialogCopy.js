@@ -1,0 +1,16 @@
+import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { c as _c } from "react/compiler-runtime";
+import React from 'react';
+import { Link, Text } from '../ink.js';
+export function MCPServerDialogCopy() {
+    const $ = _c(1);
+    let t0;
+    if ($[0] === Symbol.for("react.memo_cache_sentinel")) {
+        t0 = _jsxs(Text, { children: ["MCP servers may execute code or access system resources. All tool calls require approval. Learn more in the", " ", _jsx(Link, { url: "https://code.claude.com/docs/en/mcp", children: "MCP documentation" }), "."] });
+        $[0] = t0;
+    }
+    else {
+        t0 = $[0];
+    }
+    return t0;
+}
