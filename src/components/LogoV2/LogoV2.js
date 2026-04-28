@@ -251,8 +251,8 @@ export function LogoV2() {
     }
     const layoutMode = getLayoutMode(columns);
     const userTheme = resolveThemeSetting(getGlobalConfig().theme);
-    const borderTitle = ` ${color("red", userTheme)("JAILBROKE CLAUDE")} `;
-    const compactBorderTitle = color("red", userTheme)(" JAILBROKE CLAUDE ");
+    const borderTitle = ` ${color("error", userTheme)("JAILBROKE CLAUDE")} `;
+    const compactBorderTitle = color("error", userTheme)(" JAILBROKE CLAUDE ");
     if (layoutMode === "compact") {
         let welcomeMessage = formatWelcomeMessage(username);
         if (stringWidth(welcomeMessage) > columns - 4) {
