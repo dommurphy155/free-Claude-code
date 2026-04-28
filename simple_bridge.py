@@ -228,22 +228,22 @@ async def messages(request: Request):
                                         idx = tc.get("index", 0)
                                         if idx not in tool_call_chunks:
                                             tool_call_chunks[idx] = {"id": tc.get("id", f"call_{idx}"), "name": "", "arguments": ""}
+                                            yield f"event: content_block_start\ndata: " + json.dumps({"type": "content_block_start", "index": idx + 1, "content_block": {"type": "tool_use", "id": tool_call_chunks[idx]["id"], "name": tc.get("function", {}).get("name", ""), "input": {}}}) + "\n\n"
                                         if tc.get("function", {}).get("name"):
                                             tool_call_chunks[idx]["name"] += tc["function"]["name"]
                                         if tc.get("function", {}).get("arguments"):
                                             tool_call_chunks[idx]["arguments"] += tc["function"]["arguments"]
+                                            yield f"event: content_block_delta\ndata: " + json.dumps({"type": "content_block_delta", "index": idx + 1, "delta": {"type": "input_json_delta", "partial_json": tc["function"]["arguments"]}}) + "\n\n"
                                 except Exception:
                                     pass
                 except Exception as e:
                     print(f"[BRIDGE:{request_id}] Stream error: {e}", file=sys.stderr)
 
-                yield f"event: content_block_stop\ndata: {json.dumps({'type': 'content_block_stop', 'index': 0})}\n\n"
+                yield f"event: content_block_stop\ndata: " + json.dumps({"type": "content_block_stop", "index": 0}) + "\n\n"
 
                 if tool_call_chunks:
-                    for i, (idx, tc) in enumerate(tool_call_chunks.items(), start=1):
-                        yield f"event: content_block_start\ndata: {json.dumps({'type': 'content_block_start', 'index': i, 'content_block': {'type': 'tool_use', 'id': tc['id'], 'name': tc['name'], 'input': {}}})}\n\n"
-                        yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': i, 'delta': {'type': 'input_json_delta', 'partial_json': tc['arguments']}})}\n\n"
-                        yield f"event: content_block_stop\ndata: {json.dumps({'type': 'content_block_stop', 'index': i})}\n\n"
+                    for idx in tool_call_chunks:
+                        yield f"event: content_block_stop\ndata: " + json.dumps({"type": "content_block_stop", "index": idx + 1}) + "\n\n"
                     stop_reason = "tool_use"
                 else:
                     stop_reason = "end_turn"
