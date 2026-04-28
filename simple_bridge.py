@@ -1231,25 +1231,6 @@ async def process_tool_result(tool_name: str, tool_input: dict, raw_result: str)
         return raw_result
 
 
-async def execute_tool(name: str, arguments: dict) -> str:
-    """Execute a bridge tool with RETRY LOGIC."""
-    print(f"[BRIDGE] Tool: {name}", file=sys.stderr, flush=True)
-    if name == "web_fetch":
-        return await cdp_fetch_with_retry(
-            arguments.get("url", ""),
-            retries=arguments.get("retries", 3),
-            timeout=arguments.get("timeout", 30)
-        )
-    elif name == "web_search":
-        return await cdp_search_with_retry(
-            arguments.get("query", ""),
-            retries=arguments.get("retries", 3),
-            num_results=arguments.get("num_results", 10)
-        )
-    # Note: browser_task is now handled by native BrowserTaskTool
-    return f"Unknown tool: {name}"
-
-
 # =============================================================================
 # FASTAPI APP
 # =============================================================================
