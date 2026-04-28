@@ -23,34 +23,18 @@ const inputSchema = lazySchema(() => z.strictObject({
         .optional()
         .describe('Never include search results from these domains'),
 }));
-const searchResultSchema = lazySchema(() => {
-    const searchHitSchema = z.object({
-        title: z.string().describe('The title of the search result'),
-        url: z.string().describe('The URL of the search result'),
-    });
-    return z.object({
-        tool_use_id: z.string().describe('ID of the tool use'),
-        content: z.array(searchHitSchema).describe('Array of search hits'),
-    });
-});
+
 const outputSchema = lazySchema(() => z.object({
     query: z.string().describe('The search query that was executed'),
-    results: z
-        .array(z.union([searchResultSchema(), z.string()]))
-        .describe('Search results and/or text commentary from the model'),
-    durationSeconds: z
-        .number()
-        .describe('Time taken to complete the search operation'),
+    results: z.array(z.object({
+        title: z.string(),
+        url: z.string(),
+        snippet: z.string(),
+        score: z.number(),
+    })).describe('Search results'),
+    durationSeconds: z.number().describe('Time taken to complete the search operation'),
 }));
-function makeToolSchema(input) {
-    return {
-        type: 'web_search_20250305',
-        name: 'web_search',
-        allowed_domains: input.allowed_domains,
-        blocked_domains: input.blocked_domains,
-        max_uses: 8,
-    };
-}
+
 export const WebSearchTool = buildTool({
     name: WEB_SEARCH_TOOL_NAME,
     searchHint: 'search the web for current information',
@@ -142,9 +126,8 @@ export const WebSearchTool = buildTool({
     },
     async call(input, context, _canUseTool, _parentMessage, onProgress) {
         const startTime = performance.now();
-        const { query, depth = 'standard' } = input;
+        const { query } = input;
 
-        // Phase 1: Search using SearXNG
         onProgress?.({
             type: 'web_search',
             query,
@@ -156,7 +139,7 @@ export const WebSearchTool = buildTool({
 
         // Call SearXNG via HTTP API
         const searxngUrl = `http://localhost:8888/search?q=${encodeURIComponent(query)}&format=json`;
-        let searchData = { results: [], num_results: 0 };
+        let results = [];
 
         try {
             const resp = await fetch(searxngUrl, {
@@ -166,15 +149,12 @@ export const WebSearchTool = buildTool({
 
             if (resp.ok) {
                 const data = await resp.json();
-                searchData = {
-                    results: (data.results || []).map((r) => ({
-                        title: r.title || '',
-                        url: r.url || r.link || '',
-                        snippet: r.content || r.snippet || '',
-                        score: r.score || 0
-                    })),
-                    num_results: data.results?.length || 0
-                };
+                results = (data.results || []).map((r) => ({
+                    title: r.title || '',
+                    url: r.url || r.link || '',
+                    snippet: r.content || r.snippet || '',
+                    score: r.score || 0
+                }));
             } else {
                 console.error('[WEBSEARCH] SearXNG returned:', resp.status);
             }
@@ -182,105 +162,32 @@ export const WebSearchTool = buildTool({
             console.error('[WEBSEARCH] SearXNG search failed:', e);
         }
 
-        const results = searchData.results || [];
-        const resultCount = searchData.num_results || results.length;
-
-        console.error('[WEBSEARCH] Found', resultCount, 'results');
+        console.error('[WEBSEARCH] Found', results.length, 'results');
 
         onProgress?.({
             type: 'web_search',
             query,
             status: 'complete',
-            message: `Found ${resultCount} results. Fetching top sources...`,
-        });
-
-        // Phase 2: Auto-select top 3 URLs
-        const topUrls = results
-            .sort((a, b) => (b.score || 0) - (a.score || 0))
-            .slice(0, 3)
-            .map((r) => r.url)
-            .filter((url) => url && url.startsWith('http'));
-
-        console.error('[WEBSEARCH] Selected URLs:', topUrls);
-
-        // Phase 3: Auto-fetch content from selected URLs using WebFetchTool
-        let fetchResults = '';
-        if (topUrls.length > 0) {
-            onProgress?.({
-                type: 'web_search',
-                query,
-                status: 'fetching',
-                message: `Fetching details from ${topUrls.length} sources...`,
-            });
-
-            try {
-                const { WebFetchTool } = await import('../WebFetchTool/WebFetchTool.js');
-                const fetchPromises = topUrls.map(async (url) => {
-                    try {
-                        const result = await WebFetchTool.call(
-                            { urls: [url], prompt: 'Extract the main content and key information', max_concurrent: 1 },
-                            { abortController: context.abortController, options: { isNonInteractiveSession: false } }
-                        );
-                        return { url, content: result.data?.result || '', success: true };
-                    } catch (err) {
-                        return { url, content: '', success: false, error: String(err) };
-                    }
-                });
-
-                const fetchData = await Promise.all(fetchPromises);
-
-                const fetchResults_list = [];
-                for (const r of fetchData) {
-                    if (r.success && r.content) {
-                        fetchResults_list.push(`## ${r.url}\n\n${r.content.substring(0, 5000)}\n\n---`);
-                    }
-                }
-                fetchResults = fetchResults_list.join('\n\n');
-            } catch (e) {
-                console.error('[WEBSEARCH] Fetch failed:', e);
-                fetchResults = 'Note: Could not fetch details from sources.';
-            }
-        }
-
-        onProgress?.({
-            type: 'web_search',
-            status: 'complete',
-            message: `Found ${resultCount} results, fetched ${topUrls.length} sources. Ready to synthesize.`,
+            message: `Found ${results.length} results`,
         });
 
         const endTime = performance.now();
 
-        const searchText = JSON.stringify(searchData, null, 2);
-        const combinedResults = `SEARCH RESULTS:\n\n${searchText}\n\n---\n\nFETCHED CONTENT:\n\n${fetchResults}`;
-
         return {
             data: {
                 query,
-                results: [combinedResults],
+                results,
                 durationSeconds: (endTime - startTime) / 1000,
             }
         };
     },
     mapToolResultToToolResultBlockParam(output, toolUseID) {
         const { query, results } = output;
-        let formattedOutput = `Research complete for: "${query}"\n\n`;
-        formattedOutput += `Search and content fetching done. Synthesize the findings below into a clear answer.\n\n`;
-        (results ?? []).forEach(result => {
-            if (result == null)
-                return;
-            if (typeof result === 'string') {
-                formattedOutput += result + '\n\n';
-            }
-            else {
-                if (result.content?.length > 0) {
-                    formattedOutput += `Links: ${jsonStringify(result.content)}\n\n`;
-                }
-            }
-        });
+        const formattedResults = results.map(r => `- [${r.title}](${r.url})\n  ${r.snippet.substring(0, 200)}...`).join('\n\n');
         return {
             tool_use_id: toolUseID,
             type: 'tool_result',
-            content: formattedOutput.trim(),
+            content: `Search results for "${query}":\n\n${formattedResults}`,
         };
     },
 });
