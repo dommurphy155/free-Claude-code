@@ -7,6 +7,8 @@ import { getMainLoopModel } from '../../utils/model/model.js';
 import { jsonStringify } from '../../utils/slowOperations.js';
 import { getWebSearchPrompt, WEB_SEARCH_TOOL_NAME } from './prompt.js';
 import { getToolUseSummary, renderToolResultMessage, renderToolUseMessage, renderToolUseProgressMessage, } from './UI.js';
+import { execa } from 'execa';
+
 const inputSchema = lazySchema(() => z.strictObject({
     query: z.string().min(2).describe('The search query to use'),
     depth: z
@@ -51,18 +53,10 @@ function makeToolSchema(input) {
     };
 }
 function makeOutputFromSearchResponse(result, query, durationSeconds) {
-    // The result is a sequence of these blocks:
-    // - text to start -- always?
-    // [
-    //    - server_tool_use
-    //    - web_search_tool_result
-    //    - text and citation blocks intermingled
-    //  ]+  (this block repeated for each search)
     const results = [];
     let textAcc = '';
     let inText = true;
     for (const block of result) {
-        // Skip null or undefined blocks
         if (!block) {
             continue;
         }
@@ -77,14 +71,12 @@ function makeOutputFromSearchResponse(result, query, durationSeconds) {
             continue;
         }
         if (block.type === 'web_search_tool_result') {
-            // Handle error case - content is a WebSearchToolResultError
             if (!Array.isArray(block.content)) {
                 const errorMessage = `Web search error: ${block.content.error_code}`;
                 logError(new Error(errorMessage));
                 results.push(errorMessage);
                 continue;
             }
-            // Success case - add results to our collection
             const hits = block.content.map(r => ({ title: r.title, url: r.url }));
             results.push({
                 tool_use_id: block.tool_use_id,
@@ -129,18 +121,15 @@ export const WebSearchTool = buildTool({
     isEnabled() {
         const provider = getAPIProvider();
         const model = getMainLoopModel();
-        // Enable for firstParty
         if (provider === 'firstParty') {
             return true;
         }
-        // Enable for Vertex AI with supported models (Claude 4.0+)
         if (provider === 'vertex') {
             const supportsWebSearch = model.includes('claude-opus-4') ||
                 model.includes('claude-sonnet-4') ||
                 model.includes('claude-haiku-4');
             return supportsWebSearch;
         }
-        // Foundry only ships models that already support Web Search
         if (provider === 'foundry') {
             return true;
         }
@@ -182,9 +171,6 @@ export const WebSearchTool = buildTool({
     renderToolUseProgressMessage,
     renderToolResultMessage,
     extractSearchText() {
-        // renderToolResultMessage shows only "Did N searches in Xs" chrome —
-        // the results[] content never appears on screen. Heuristic would index
-        // string entries in results[] (phantom match). Nothing to search.
         return '';
     },
     async validateInput(input) {
@@ -208,70 +194,52 @@ export const WebSearchTool = buildTool({
     async call(input, context, _canUseTool, _parentMessage, onProgress) {
         const startTime = performance.now();
         const { query, depth = 'standard' } = input;
-        // Initialize research task state
-        try {
-            await fetch('http://127.0.0.1:8789/research/init', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ task_id: crypto.randomUUID(), topic: query }),
-            });
-        }
-        catch (e) {
-            // Non-blocking - state tracking is best-effort
-        }
-        // Phase 1: Search
+
+        // Phase 1: Search using SearXNG Python module
         onProgress?.({
             type: 'web_search',
             query,
             status: 'searching',
             message: `Searching for "${query}"...`,
         });
-        const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+
         console.error('[WEBSEARCH] Query:', query);
-        const bridgeUrl = 'http://127.0.0.1:8789/cdp/search';
-        const resp = await fetch(bridgeUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query, search_url: searchUrl, depth, max_results: 15 }),
-            signal: context.abortController.signal,
-        });
-        const searchText = await resp.text();
-        console.error('[WEBSEARCH] Search response:', searchText.length);
-        // Parse search results
-        let searchData = {};
+
+        // Call searxng.py Python module
+        let searchData = { results: [], num_results: 0 };
         try {
-            searchData = JSON.parse(searchText);
+            const homeDir = process.env.HOME || '/root';
+            const { stdout } = await execa('python3', [
+                '-c',
+                `import asyncio; import sys; sys.path.insert(0, '${homeDir}/claude-code-haha'); from searxng import search; print(asyncio.run(search('${query.replace(/'/g, "\\'")}', max_results=15, depth='${depth}')))`
+            ], { timeout: 30000 });
+            searchData = JSON.parse(stdout);
+        } catch (e) {
+            console.error('[WEBSEARCH] SearXNG search failed:', e);
         }
-        catch (e) {
-            console.error('[WEBSEARCH] Failed to parse search results:', e);
-        }
+
         const results = searchData.results || [];
         const resultCount = searchData.num_results || results.length;
-        // Mark search phase complete
-        try {
-            await fetch('http://127.0.0.1:8789/research/track-phase', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phase: 'search', results: results.slice(0, 5) }),
-            });
-        }
-        catch (e) {
-            // Non-blocking
-        }
+
+        console.error('[WEBSEARCH] Found', resultCount, 'results');
+
         onProgress?.({
             type: 'web_search',
             query,
             status: 'complete',
             message: `Found ${resultCount} results. Fetching top sources...`,
         });
+
         // Phase 2: Auto-select top 3 URLs by score
         const topUrls = results
             .sort((a, b) => (b.score || 0) - (a.score || 0))
             .slice(0, 3)
             .map((r) => r.url)
             .filter((url) => url && url.startsWith('http'));
+
         console.error('[WEBSEARCH] Selected URLs:', topUrls);
-        // Phase 3: Auto-fetch content from selected URLs
+
+        // Phase 3: Auto-fetch content from selected URLs using WebFetchTool
         let fetchResults = '';
         if (topUrls.length > 0) {
             onProgress?.({
@@ -280,43 +248,50 @@ export const WebSearchTool = buildTool({
                 status: 'fetching',
                 message: `Fetching details from ${topUrls.length} sources...`,
             });
+
             try {
-                const fetchResp = await fetch('http://127.0.0.1:8789/cdp/fetch/parallel', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        urls: topUrls,
-                        max_chars: 15000,
-                        max_concurrent: 3,
-                    }),
-                    signal: context.abortController.signal,
+                // Import WebFetchTool dynamically to avoid circular dependency
+                const { WebFetchTool } = await import('../WebFetchTool/WebFetchTool.js');
+                const fetchPromises = topUrls.map(async (url) => {
+                    try {
+                        const result = await WebFetchTool.call(
+                            { urls: [url], prompt: 'Extract the main content and key information', max_concurrent: 1 },
+                            { abortController: context.abortController, options: { isNonInteractiveSession: false } }
+                        );
+                        return { url, content: result.data?.result || '', success: true };
+                    } catch (err) {
+                        return { url, content: '', success: false, error: String(err) };
+                    }
                 });
-                const fetchData = await fetchResp.json();
+
+                const fetchData = await Promise.all(fetchPromises);
+
                 // Build fetch results summary
                 const fetchResults_list = [];
-                if (fetchData.results) {
-                    for (const r of fetchData.results) {
-                        if (r.success && r.content) {
-                            fetchResults_list.push(`## ${r.url}\n\n${r.content.substring(0, 5000)}\n\n---`);
-                        }
+                for (const r of fetchData) {
+                    if (r.success && r.content) {
+                        fetchResults_list.push(`## ${r.url}\n\n${r.content.substring(0, 5000)}\n\n---`);
                     }
                 }
                 fetchResults = fetchResults_list.join('\n\n');
-            }
-            catch (e) {
+            } catch (e) {
                 console.error('[WEBSEARCH] Fetch failed:', e);
                 fetchResults = 'Note: Could not fetch details from sources.';
             }
         }
+
         onProgress?.({
             type: 'web_search',
-            query,
             status: 'complete',
             message: `Found ${resultCount} results, fetched ${topUrls.length} sources. Ready to synthesize.`,
         });
+
         const endTime = performance.now();
+
         // Combine everything
+        const searchText = JSON.stringify(searchData, null, 2);
         const combinedResults = `SEARCH RESULTS:\n\n${searchText}\n\n---\n\nFETCHED CONTENT:\n\n${fetchResults}`;
+
         return {
             data: {
                 query,
@@ -327,7 +302,6 @@ export const WebSearchTool = buildTool({
     },
     mapToolResultToToolResultBlockParam(output, toolUseID) {
         const { query, results } = output;
-        // Search + fetch already completed inline - just return the combined results
         let formattedOutput = `Research complete for: "${query}"\n\n`;
         formattedOutput += `Search and content fetching done. Synthesize the findings below into a clear answer.\n\n`;
         (results ?? []).forEach(result => {

@@ -5,7 +5,8 @@ import { getRuleByContentsForTool } from '../../utils/permissions/permissions.js
 import { isPreapprovedHost } from './preapproved.js';
 import { DESCRIPTION, WEB_FETCH_TOOL_NAME } from './prompt.js';
 import { getToolUseSummary, renderToolResultMessage, renderToolUseMessage, renderToolUseProgressMessage, } from './UI.js';
-import { applyPromptToMarkdown, isPreapprovedUrl, } from './utils.js';
+import { applyPromptToMarkdown, getURLMarkdownContent, isPreapprovedUrl } from './utils.js';
+
 const inputSchema = lazySchema(() => z.strictObject({
     urls: z
         .array(z.string().url())
@@ -30,6 +31,7 @@ const outputSchema = lazySchema(() => z.object({
         .describe('Time taken to fetch and process the content'),
     url: z.string().describe('The URL that was fetched'),
 }));
+
 function webFetchToolInputToPermissionRuleContent(input) {
     try {
         const parsedInput = WebFetchTool.inputSchema.safeParse(input);
@@ -37,7 +39,6 @@ function webFetchToolInputToPermissionRuleContent(input) {
             return `input:${input.toString()}`;
         }
         const { urls } = parsedInput.data;
-        // Use first URL for permission rule
         const hostname = new URL(urls[0]).hostname;
         return `domain:${hostname}`;
     }
@@ -45,10 +46,10 @@ function webFetchToolInputToPermissionRuleContent(input) {
         return `input:${input.toString()}`;
     }
 }
+
 export const WebFetchTool = buildTool({
     name: WEB_FETCH_TOOL_NAME,
     searchHint: 'fetch and extract content from a URL',
-    // 100K chars - tool result persistence threshold
     maxResultSizeChars: 100_000,
     shouldDefer: true,
     async description(input) {
@@ -92,7 +93,6 @@ export const WebFetchTool = buildTool({
         const appState = context.getAppState();
         const permissionContext = appState.toolPermissionContext;
         const { urls } = input;
-        // Check if any hostname is in the preapproved list
         for (const url of urls) {
             try {
                 const parsedUrl = new URL(url);
@@ -105,10 +105,8 @@ export const WebFetchTool = buildTool({
                 }
             }
             catch {
-                // Continue checking other URLs
             }
         }
-        // Use first URL for permission rule
         const ruleContent = webFetchToolInputToPermissionRuleContent({ url: urls[0] });
         const denyRule = getRuleByContentsForTool(permissionContext, WebFetchTool, 'deny').get(ruleContent);
         if (denyRule) {
@@ -151,12 +149,6 @@ export const WebFetchTool = buildTool({
         };
     },
     async prompt(_options) {
-        // Always include the auth warning regardless of whether ToolSearch is
-        // currently in the tools list. Conditionally toggling this prefix based
-        // on ToolSearch availability caused the tool description to flicker
-        // between SDK query() calls (when ToolSearch enablement varies due to
-        // MCP tool count thresholds), invalidating the Anthropic API prompt
-        // cache on each toggle — two consecutive cache misses per flicker event.
         return `IMPORTANT: WebFetch WILL FAIL for authenticated or private URLs. Before using this tool, check if the URL points to an authenticated service (e.g. Google Docs, Confluence, Jira, GitHub). If so, look for a specialized MCP tool that provides authenticated access.
 ${DESCRIPTION}`;
     },
@@ -196,75 +188,99 @@ ${DESCRIPTION}`;
     renderToolUseMessage,
     renderToolUseProgressMessage,
     renderToolResultMessage,
-    async call({ urls, prompt, max_concurrent = 3 }, { abortController, options: { isNonInteractiveSession } }) {
+    async call(
+        { urls, prompt, max_concurrent = 3 },
+        { abortController, options: { isNonInteractiveSession } },
+    ) {
         const start = Date.now();
-        // Use bridge for parallel fetching
-        const fetchUrl = 'http://127.0.0.1:8789/cdp/fetch/parallel';
+
         console.error('[WEBFETCH] Parallel fetch:', urls.length, 'URLs');
-        const resp = await fetch(fetchUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                urls,
-                max_chars: 15000,
-                max_concurrent: Math.min(max_concurrent, 5),
-            }),
-            signal: abortController.signal,
+
+        // Fetch URLs directly using getURLMarkdownContent
+        const fetchPromises = urls.map(async (url) => {
+            try {
+                const fetched = await getURLMarkdownContent(url, abortController);
+                // Check if we got a redirect instead of content
+                if ('type' in fetched && fetched.type === 'redirect') {
+                    return {
+                        url,
+                        content: '',
+                        success: false,
+                        error: `Redirect to ${fetched.redirectUrl} (${fetched.statusCode})`,
+                        size: 0,
+                    };
+                }
+                return {
+                    url,
+                    content: fetched.content,
+                    success: true,
+                    size: fetched.bytes,
+                };
+            } catch (error) {
+                return {
+                    url,
+                    content: '',
+                    success: false,
+                    error: String(error),
+                    size: 0,
+                };
+            }
         });
-        const data = await resp.json();
-        const results = data.results || [];
+
+        const results = await Promise.all(fetchPromises);
+
         console.error('[WEBFETCH] Got', results.length, 'results');
-        // Mark fetch phase complete
-        try {
-            await fetch('http://127.0.0.1:8789/research/track-phase', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phase: 'fetch', urls: urls }),
-            });
-        }
-        catch (e) {
-            // Non-blocking
-        }
+
         // Process each result with the prompt using Haiku
         const processedResults = [];
         for (const result of results) {
             if (result.success && result.content) {
                 const isPreapproved = isPreapprovedUrl(result.url);
-                const extracted = await applyPromptToMarkdown(prompt, result.content, abortController.signal, isNonInteractiveSession, isPreapproved);
+                const extracted = await applyPromptToMarkdown(
+                    prompt,
+                    result.content,
+                    abortController.signal,
+                    isNonInteractiveSession,
+                    isPreapproved,
+                );
                 processedResults.push(`## ${result.url}\n\n${extracted}\n\n---`);
-            }
-            else {
-                processedResults.push(`## ${result.url}\n\nError: ${result.error || 'Failed to fetch'}\n\n---`);
+            } else {
+                processedResults.push(
+                    `## ${result.url}\n\nError: ${result.error || 'Failed to fetch'}\n\n---`,
+                );
             }
         }
+
         const combinedResult = processedResults.join('\n\n');
-        const totalBytes = results.reduce((sum, r) => sum + (r.size || 0), 0);
+        const totalBytes = results.reduce(
+            (sum, r) => sum + (r.size || 0),
+            0,
+        );
+
         const output = {
             bytes: totalBytes,
-            code: results.every((r) => r.success) ? 200 : 207, // 207 = Multi-Status
-            codeText: results.every((r) => r.success)
-                ? 'OK'
-                : 'Partial Content',
+            code: results.every((r) => r.success) ? 200 : 207,
+            codeText: results.every((r) => r.success) ? 'OK' : 'Partial Content',
             result: combinedResult,
             durationMs: Date.now() - start,
-            url: urls[0], // Primary URL for display
+            url: urls[0],
         };
+
         return { data: output };
     },
     mapToolResultToToolResultBlockParam({ result }, toolUseID) {
-        // CRITICAL: Check research state to enforce workflow
-        // This message is designed to be parsed by the system to block completion
-        const content = `╔════════════════════════════════════════════════════════════════╗\n`
-            + `║ ✅ PHASE 3 COMPLETE - READY TO SYNTHESIZE ║\n`
-            + `╚════════════════════════════════════════════════════════════════╝\n\n`
-            + `Fetched content from URLs:\n\n${result}\n\n`
-            + `══════════════════════════════════════════════════════════════════\n`
-            + `MANDATORY: Before providing final answer, you MUST:\n`
-            + `1. Mark synthesis phase complete by calling research state\n`
-            + `2. Verify all phases are done: POST /research/check-completion\n`
-            + `3. Only then provide your synthesized answer with citations\n`
-            + `══════════════════════════════════════════════════════════════════\n\n`
-            + `NEXT: Synthesize findings and provide comprehensive answer with citations.`;
+        const content = `╔════════════════════════════════════════════════════════════════╗\n` +
+            `║ ✅ PHASE 3 COMPLETE - READY TO SYNTHESIZE ║\n` +
+            `╚════════════════════════════════════════════════════════════════╝\n\n` +
+            `Fetched content from URLs:\n\n${result}\n\n` +
+            `══════════════════════════════════════════════════════════════════\n` +
+            `MANDATORY: Before providing final answer, you MUST:\n` +
+            `1. Mark synthesis phase complete by calling research state\n` +
+            `2. Verify all phases are done: POST /research/check-completion\n` +
+            `3. Only then provide your synthesized answer with citations\n` +
+            `══════════════════════════════════════════════════════════════════\n\n` +
+            `NEXT: Synthesize findings and provide comprehensive answer with citations.`;
+
         return {
             tool_use_id: toolUseID,
             type: 'tool_result',
@@ -272,6 +288,7 @@ ${DESCRIPTION}`;
         };
     },
 });
+
 function buildSuggestions(ruleContent) {
     return [
         {

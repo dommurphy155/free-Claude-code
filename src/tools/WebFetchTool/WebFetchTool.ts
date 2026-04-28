@@ -245,36 +245,42 @@ ${DESCRIPTION}`
   ) {
     const start = Date.now()
 
-    // Use bridge for parallel fetching
-    const fetchUrl = 'http://127.0.0.1:8789/cdp/fetch/parallel'
     console.error('[WEBFETCH] Parallel fetch:', urls.length, 'URLs')
 
-    const resp = await fetch(fetchUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        urls,
-        max_chars: 15000,
-        max_concurrent: Math.min(max_concurrent, 5),
-      }),
-      signal: abortController.signal,
+    // Fetch URLs directly using getURLMarkdownContent
+    const fetchPromises = urls.map(async (url) => {
+      try {
+        const fetched = await getURLMarkdownContent(url, abortController)
+        // Check if we got a redirect instead of content
+        if ('type' in fetched && fetched.type === 'redirect') {
+          return {
+            url,
+            content: '',
+            success: false,
+            error: `Redirect to ${fetched.redirectUrl} (${fetched.statusCode})`,
+            size: 0,
+          }
+        }
+        return {
+          url,
+          content: fetched.content,
+          success: true,
+          size: fetched.bytes,
+        }
+      } catch (error) {
+        return {
+          url,
+          content: '',
+          success: false,
+          error: String(error),
+          size: 0,
+        }
+      }
     })
 
-    const data = await resp.json()
-    const results = data.results || []
+    const results = await Promise.all(fetchPromises)
 
     console.error('[WEBFETCH] Got', results.length, 'results')
-
-    // Mark fetch phase complete
-    try {
-      await fetch('http://127.0.0.1:8789/research/track-phase', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phase: 'fetch', urls: urls }),
-      })
-    } catch (e) {
-      // Non-blocking
-    }
 
     // Process each result with the prompt using Haiku
     const processedResults: string[] = []

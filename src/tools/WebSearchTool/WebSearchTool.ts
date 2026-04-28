@@ -21,6 +21,7 @@ import {
   renderToolUseMessage,
   renderToolUseProgressMessage,
 } from './UI.js'
+import { execa } from 'execa'
 
 const inputSchema = lazySchema(() =>
   z.strictObject({
@@ -264,18 +265,7 @@ export const WebSearchTool = buildTool({
     const startTime = performance.now()
     const { query, depth = 'standard' } = input
 
-    // Initialize research task state
-    try {
-      await fetch('http://127.0.0.1:8789/research/init', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task_id: crypto.randomUUID(), topic: query }),
-      })
-    } catch (e) {
-      // Non-blocking - state tracking is best-effort
-    }
-
-    // Phase 1: Search
+    // Phase 1: Search using SearXNG Python module
     onProgress?.({
       type: 'web_search',
       query,
@@ -283,40 +273,25 @@ export const WebSearchTool = buildTool({
       message: `Searching for "${query}"...`,
     })
 
-    const searchUrl = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`
     console.error('[WEBSEARCH] Query:', query)
 
-    const bridgeUrl = 'http://127.0.0.1:8789/cdp/search'
-    const resp = await fetch(bridgeUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, search_url: searchUrl, depth, max_results: 15 }),
-      signal: context.abortController.signal,
-    })
-    const searchText = await resp.text()
-    console.error('[WEBSEARCH] Search response:', searchText.length)
-
-    // Parse search results
-    let searchData: any = {}
+    // Call searxng.py Python module
+    let searchData: any = { results: [], num_results: 0 }
     try {
-      searchData = JSON.parse(searchText)
+      const { stdout } = await execa('python3', [
+        '-c',
+        `import asyncio; import sys; sys.path.insert(0, '${process.env.HOME}/claude-code-haha'); from searxng import search; print(asyncio.run(search('${query.replace(/'/g, "\\'")}', max_results=15, depth='${depth}')))`
+      ], { timeout: 30000 })
+      searchData = JSON.parse(stdout)
     } catch (e) {
-      console.error('[WEBSEARCH] Failed to parse search results:', e)
+      console.error('[WEBSEARCH] SearXNG search failed:', e)
+      // Fallback: return empty results
     }
 
     const results = searchData.results || []
     const resultCount = searchData.num_results || results.length
 
-    // Mark search phase complete
-    try {
-      await fetch('http://127.0.0.1:8789/research/track-phase', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phase: 'search', results: results.slice(0, 5) }),
-      })
-    } catch (e) {
-      // Non-blocking
-    }
+    console.error('[WEBSEARCH] Found', resultCount, 'results')
 
     onProgress?.({
       type: 'web_search',
@@ -334,7 +309,7 @@ export const WebSearchTool = buildTool({
 
     console.error('[WEBSEARCH] Selected URLs:', topUrls)
 
-    // Phase 3: Auto-fetch content from selected URLs
+    // Phase 3: Auto-fetch content from selected URLs using WebFetchTool
     let fetchResults = ''
     if (topUrls.length > 0) {
       onProgress?.({
@@ -345,25 +320,27 @@ export const WebSearchTool = buildTool({
       })
 
       try {
-        const fetchResp = await fetch('http://127.0.0.1:8789/cdp/fetch/parallel', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            urls: topUrls,
-            max_chars: 15000,
-            max_concurrent: 3,
-          }),
-          signal: context.abortController.signal,
+        // Import WebFetchTool dynamically to avoid circular dependency
+        const { WebFetchTool } = await import('../WebFetchTool/WebFetchTool.js')
+        const fetchPromises = topUrls.map(async (url: string) => {
+          try {
+            const result = await WebFetchTool.call(
+              { urls: [url], prompt: 'Extract the main content and key information', max_concurrent: 1 },
+              { abortController: context.abortController, options: { isNonInteractiveSession: false } }
+            )
+            return { url, content: result.data?.result || '', success: true }
+          } catch (err) {
+            return { url, content: '', success: false, error: String(err) }
+          }
         })
-        const fetchData = await fetchResp.json()
+
+        const fetchData = await Promise.all(fetchPromises)
 
         // Build fetch results summary
         const fetchResults_list: string[] = []
-        if (fetchData.results) {
-          for (const r of fetchData.results) {
-            if (r.success && r.content) {
-              fetchResults_list.push(`## ${r.url}\n\n${r.content.substring(0, 5000)}\n\n---`)
-            }
+        for (const r of fetchData) {
+          if (r.success && r.content) {
+            fetchResults_list.push(`## ${r.url}\n\n${r.content.substring(0, 5000)}\n\n---`)
           }
         }
         fetchResults = fetchResults_list.join('\n\n')
@@ -375,7 +352,6 @@ export const WebSearchTool = buildTool({
 
     onProgress?.({
       type: 'web_search',
-      query,
       status: 'complete',
       message: `Found ${resultCount} results, fetched ${topUrls.length} sources. Ready to synthesize.`,
     })
@@ -383,6 +359,7 @@ export const WebSearchTool = buildTool({
     const endTime = performance.now()
 
     // Combine everything
+    const searchText = JSON.stringify(searchData, null, 2)
     const combinedResults = `SEARCH RESULTS:\n\n${searchText}\n\n---\n\nFETCHED CONTENT:\n\n${fetchResults}`
 
     return {
