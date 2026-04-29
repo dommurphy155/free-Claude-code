@@ -327,7 +327,9 @@ export function getProjectsDir(): string {
 }
 
 export function getProjectDir(projectDir: string): string {
-  return join(getProjectsDir(), sanitizePath(projectDir))
+  // Always store sessions under HOME so all sessions appear in one place
+  const homeDir = (typeof process !== 'undefined' && process.env.HOME) ? process.env.HOME : '/root';
+  return join(getProjectsDir(), sanitizePath(homeDir))
 }
 
 /**
