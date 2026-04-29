@@ -233,6 +233,9 @@ export const WebSearchTool = buildTool({
     return ''
   },
   async validateInput(input) {
+    if (!input || typeof input.query !== 'string') {
+      return { result: false, message: 'Error: Missing or invalid input', errorCode: 1 }
+    }
     const { query, allowed_domains, blocked_domains } = input
     if (!query.length) {
       return {
