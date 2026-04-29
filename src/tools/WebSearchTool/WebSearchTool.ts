@@ -261,10 +261,17 @@ export const WebSearchTool = buildTool({
     return { result: true }
   },
   async call(input, context, _canUseTool, _parentMessage, onProgress) {
+    console.error('[WEBSEARCH] === CALL STARTED ===')
+    console.error('[WEBSEARCH] Input:', JSON.stringify(input))
+    console.error('[WEBSEARCH] Context keys:', Object.keys(context || {}).join(', '))
+
     const startTime = performance.now()
     const { query, depth = 'standard' } = input
 
+    console.error('[WEBSEARCH] Query:', query, 'Depth:', depth)
+
     // Phase 1: Search using SearXNG HTTP API
+    console.error('[WEBSEARCH] Calling onProgress...')
     onProgress?.({
       type: 'web_search',
       query,
@@ -272,20 +279,25 @@ export const WebSearchTool = buildTool({
       message: `Searching for "${query}"...`,
     })
 
-    console.error('[WEBSEARCH] Query:', query)
+    console.error('[WEBSEARCH] Starting SearXNG search...')
 
     // Call SearXNG via HTTP API
     const searxngUrl = `http://localhost:8888/search?q=${encodeURIComponent(query)}&format=json`
+    console.error('[WEBSEARCH] SearXNG URL:', searxngUrl)
     let searchData: any = { results: [], num_results: 0 }
 
     try {
+      console.error('[WEBSEARCH] Fetching from SearXNG...')
       const resp = await fetch(searxngUrl, {
         signal: context.abortController.signal,
         headers: { 'Accept': 'application/json' }
       })
+      console.error('[WEBSEARCH] Response status:', resp.status)
 
       if (resp.ok) {
+        console.error('[WEBSEARCH] Parsing JSON...')
         const data = await resp.json()
+        console.error('[WEBSEARCH] Got data, results count:', data.results?.length || 0)
         searchData = {
           results: (data.results || []).map((r: any) => ({
             title: r.title || '',
@@ -296,7 +308,7 @@ export const WebSearchTool = buildTool({
           num_results: data.results?.length || 0
         }
       } else {
-        console.error('[WEBSEARCH] SearXNG returned:', resp.status)
+        console.error('[WEBSEARCH] SearXNG returned error:', resp.status)
       }
     } catch (e) {
       console.error('[WEBSEARCH] SearXNG search failed:', e)
@@ -308,6 +320,7 @@ export const WebSearchTool = buildTool({
     console.error('[WEBSEARCH] Found', resultCount, 'results')
 
     // SKIP FETCH PHASE - just return search results to avoid hang
+    console.error('[WEBSEARCH] Calling onProgress complete...')
     onProgress?.({
       type: 'web_search',
       query,
@@ -318,8 +331,10 @@ export const WebSearchTool = buildTool({
     const endTime = performance.now()
 
     // Return just search results - let skill call web_fetch separately
+    console.error('[WEBSEARCH] Building result...')
     const searchText = JSON.stringify(searchData, null, 2)
 
+    console.error('[WEBSEARCH] === CALL COMPLETE ===')
     return {
       data: {
         query,
