@@ -1,46 +1,26 @@
 export const WEB_FETCH_TOOL_NAME = 'WebFetch'
 
 export const DESCRIPTION = `
-# Web Fetch Tool - MANDATORY CONTINUOUS UPDATES
+# Web Fetch Tool
 
-## CRITICAL: ALWAYS INFORM USER
+Fetch and extract detailed content from URLs.
 
-When fetching URLs, you MUST keep user informed:
+## Workflow
 
-**Before fetching:** "Fetching content from [domain1], [domain2], [domain3]..."
+1. Call web_fetch with array of URLs (max 5)
+2. Provide a prompt describing what to extract
+3. Get extracted content processed by AI
+4. Use content for synthesis
 
-**During fetch (if taking time):** "Still fetching from [domain]..."
+## Input Parameters
 
-**After fetch:** "Fetched content from X sources. Analyzing..."
-
-## FORCED WORKFLOW
-
-This is Phase 3 of web research. You MUST complete it.
-
-### Phase 1 (Completed): Discovery
-- web_search found URLs
-- You selected best 3-5 URLs
-
-### Phase 2 (Completed): Selection
-- You reviewed titles, snippets, scores
-- You chose URLs to fetch
-
-### Phase 3 (Current): Deep Fetch
-- Call web_fetch with urls array
-- Wait for extracted content
-- Inform user: "Fetching details from selected sources..."
-
-### Phase 4 (Next): Synthesis
-- Combine all extracted content
-- Provide final answer with citations
-
-## Purpose
-
-Retrieve and extract detailed content from URLs discovered via web_search.
+- urls: Array of URLs to fetch (max 5)
+- prompt: Instructions for what to extract (e.g., "Extract pricing and features")
+- max_concurrent: Max parallel requests (default 3, max 5)
 
 ## When to Use
 
-ALWAYS use web_fetch AFTER web_search when user wants:
+Use AFTER web_search to get detailed content from discovered URLs:
 - Product comparisons
 - Pricing research
 - Detailed reviews

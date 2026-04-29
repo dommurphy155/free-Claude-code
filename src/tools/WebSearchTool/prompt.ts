@@ -1,52 +1,37 @@
 export const WEB_SEARCH_TOOL_NAME = 'web_search'
 
 export const WEB_SEARCH_PROMPT = `
-# Web Search Tool - MANDATORY WORKFLOW
+# Web Search Tool
 
-## CRITICAL: ALWAYS REPLY FIRST
+Use this tool to search the web for current information.
 
-When user asks for web search ("find cheapest iPhone", "what's the best laptop", etc.):
+## Workflow
 
-**YOU MUST IMMEDIATELY REPLY to user BEFORE calling tool:**
-> "I'll search for that and get back to you with the best options..."
+1. Call web_search with the user's query
+2. Get results with titles, URLs, snippets, and scores
+3. Select top 3-5 results by relevance score
+4. Use web_fetch to get detailed content from those URLs
+5. Synthesize findings with citations
 
-**DO NOT** silently call the tool. User must see acknowledgment immediately.
+## Output Format
 
-## MANDATORY CONTINUOUS UPDATES
+Returns JSON with search results:
+- query: The search query executed
+- results: Array of results with title, url, snippet, score
+- durationSeconds: Time taken
 
-After EACH phase, you MUST inform user of progress:
+## When to Use
 
-1. **After search completes:** "Found X results from Y queries. Now fetching details from the top sources..."
-2. **During fetch:** "Fetching content from [site1], [site2], [site3]..."
-3. **After fetch:** "Analyzing the results..."
-4. **Final answer:** Provide synthesized answer with sources
+- Product research: "Find cheapest iPhone"
+- Comparisons: "Best laptops under $1000"
+- Current info: "Latest news on..."
+- Discovery: "What are the options for..."
 
-## FORCED WORKFLOW (DO NOT SKIP)
+## depth Parameter
 
-You MUST complete ALL phases. Do NOT stop after search.
-
-### Phase 1: Discovery (web_search)
-- Call web_search with depth="deep" for research queries
-- Acknowledge user immediately when calling
-- Wait for results
-
-### Phase 2: Selection (YOU DO THIS)
-- Review search results JSON
-- Select 3-5 best URLs based on:
-  * Relevance score
-  * Source credibility (prefer: official sites, reputable reviews)
-  * Snippet quality
-- Inform user: "Found X results. Fetching details from top sources..."
-
-### Phase 3: Deep Fetch (web_fetch)
-- Call web_fetch with selected URLs array
-- Pass specific extraction prompt: "Extract pricing information, key features, pros/cons"
-- Wait for results
-
-### Phase 4: Synthesis (YOU DO THIS)
-- Combine all fetched content
-- Provide comprehensive answer
-- Cite sources with markdown links
+- **fast**: Quick results
+- **standard**: Balanced research (default)
+- **deep**: Thorough research with query expansion
 
 ## When to Use Web Search
 

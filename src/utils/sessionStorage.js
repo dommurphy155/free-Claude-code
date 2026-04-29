@@ -297,7 +297,9 @@ export function isCustomTitleEnabled() {
 // stable for a given input. Worktree switches just change the key — no
 // cache clear needed.
 export const getProjectDir = memoize((projectDir) => {
-    return join(getProjectsDir(), sanitizePath(projectDir));
+    // Always store sessions under HOME so all sessions appear in one place
+    const homeDir = (typeof process !== 'undefined' && process.env.HOME) ? process.env.HOME : '/root';
+    return join(getProjectsDir(), sanitizePath(homeDir));
 });
 let project = null;
 let cleanupRegistered = false;
