@@ -1,4 +1,4 @@
-export const WEB_SEARCH_TOOL_NAME = 'searxng_search'
+export const WEB_SEARCH_TOOL_NAME = 'web_search'
 
 export const WEB_SEARCH_PROMPT = `
 # Web Search Tool
@@ -7,7 +7,7 @@ Use this tool to search the web for current information.
 
 ## Workflow
 
-1. Call web_search with the user's query
+1. Call searxng_search with the user's query
 2. Get results with titles, URLs, snippets, and scores
 3. Select top 3-5 results by relevance score
 4. Use web_fetch to get detailed content from those URLs
@@ -35,7 +35,7 @@ Returns JSON with search results:
 
 ## When to Use Web Search
 
-Use **web_search** when user wants:
+Use **searxng_search** when user wants:
 - Product research: "Find cheapest iPhone"
 - Comparisons: "Best laptops under $1000"
 - Current info: "Latest news on..."
@@ -48,14 +48,14 @@ Use **depth** parameter:
 
 ## When to Use Web Fetch
 
-Use **web_fetch** AFTER web_search when you need:
+Use **WebFetch** AFTER searxng_search when you need:
 - Detailed content from discovered URLs
 - Pricing, specs, reviews from specific sites
 - To compare multiple sources
 
 ## Tool Output Format
 
-web_search returns JSON:
+searxng_search returns JSON:
 {
   "queries": ["query1", "query2"],
   "num_results": 15,
@@ -91,7 +91,7 @@ web_search returns JSON:
 User: "Find cheapest iPhone 15"
 
 You: "I'll search for the cheapest iPhone 15 deals and get back to you..."
-→ Call web_search
+→ Call searxng_search
 
 You: "Found 16 results across 3 queries. Now fetching details from Apple, Amazon, and Best Buy..."
 → Call web_fetch on top 3 URLs

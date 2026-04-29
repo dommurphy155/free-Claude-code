@@ -25,7 +25,7 @@ Always cite sources as markdown links: [Title](url)
 
 ## Hard Rules
 - NEVER answer from search snippets alone
-- NEVER skip web_fetch
+- NEVER skip WebFetch
 - NEVER hallucinate facts not present in fetched content
 - ALWAYS include sources section at the end
 - If a URL fails to fetch, try the next one
