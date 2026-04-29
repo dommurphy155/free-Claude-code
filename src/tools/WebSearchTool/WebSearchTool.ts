@@ -257,6 +257,9 @@ export const WebSearchTool = buildTool({
     console.error('[WEBSEARCH] Context keys:', Object.keys(context || {}).join(', '))
 
     const startTime = performance.now()
+    if (!input || typeof input.query !== 'string') {
+      return { query: '', results: ['Error: no query provided'], durationSeconds: 0 }
+    }
     const { query, depth = 'standard' } = input
 
     console.error('[WEBSEARCH] Query:', query, 'Depth:', depth)

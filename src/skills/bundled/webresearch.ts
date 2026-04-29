@@ -8,7 +8,7 @@ const SKILL_PROMPT = `# Web Research Skill
 ## Strict 3-Step Workflow — Follow Exactly
 
 ### STEP 1: Search
-Call searxng_search with the research topic.
+Call web_search with the research topic.
 The result will show a numbered list of URLs and snippets.
 
 ### STEP 2: Fetch (MANDATORY — never skip)
