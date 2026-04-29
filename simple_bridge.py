@@ -33,6 +33,11 @@ MODEL_MAP = {
     "claude-haiku-4-5-20251001": "meta/llama-3.3-70b-instruct",
     "sonnet": "moonshotai/kimi-k2.5",
     "opus": "moonshotai/kimi-k2.5",
+    "haiku": "moonshotai/kimi-k2.5",
+    "claude-haiku-4-5": "moonshotai/kimi-k2.5",
+    "claude-haiku-4-5-20251001": "moonshotai/kimi-k2.5",
+    "claude-3-5-haiku": "moonshotai/kimi-k2.5",
+    "claude-3-5-haiku-20241022": "moonshotai/kimi-k2.5",
     "haiku": "meta/llama-3.3-70b-instruct",
 }
 
@@ -43,6 +48,11 @@ DIRECT_MODEL_MAP = {
     "claude-haiku-4-5-20251001": "meta/llama-3.3-70b-instruct",
     "sonnet": "moonshotai/kimi-k2.5",
     "opus": "moonshotai/kimi-k2.5",
+    "haiku": "moonshotai/kimi-k2.5",
+    "claude-haiku-4-5": "moonshotai/kimi-k2.5",
+    "claude-haiku-4-5-20251001": "moonshotai/kimi-k2.5",
+    "claude-3-5-haiku": "moonshotai/kimi-k2.5",
+    "claude-3-5-haiku-20241022": "moonshotai/kimi-k2.5",
     "haiku": "meta/llama-3.3-70b-instruct",
 }
 
