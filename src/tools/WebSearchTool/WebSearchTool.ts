@@ -307,79 +307,23 @@ export const WebSearchTool = buildTool({
 
     console.error('[WEBSEARCH] Found', resultCount, 'results')
 
+    // SKIP FETCH PHASE - just return search results to avoid hang
     onProgress?.({
       type: 'web_search',
       query,
       status: 'complete',
-      message: `Found ${resultCount} results. Fetching top sources...`,
-    })
-
-    // Phase 2: Auto-select top 3 URLs by score
-    const topUrls = results
-      .sort((a: any, b: any) => (b.score || 0) - (a.score || 0))
-      .slice(0, 3)
-      .map((r: any) => r.url)
-      .filter((url: string) => url && url.startsWith('http'))
-
-    console.error('[WEBSEARCH] Selected URLs:', topUrls)
-
-    // Phase 3: Auto-fetch content from selected URLs using WebFetchTool
-    let fetchResults = ''
-    if (topUrls.length > 0) {
-      onProgress?.({
-        type: 'web_search',
-        query,
-        status: 'fetching',
-        message: `Fetching details from ${topUrls.length} sources...`,
-      })
-
-      try {
-        // Import WebFetchTool dynamically to avoid circular dependency
-        const { WebFetchTool } = await import('../WebFetchTool/WebFetchTool.js')
-        const fetchPromises = topUrls.map(async (url: string) => {
-          try {
-            const result = await WebFetchTool.call(
-              { urls: [url], prompt: 'Extract the main content and key information', max_concurrent: 1 },
-              { abortController: context.abortController, options: { isNonInteractiveSession: false } }
-            )
-            return { url, content: result.data?.result || '', success: true }
-          } catch (err) {
-            return { url, content: '', success: false, error: String(err) }
-          }
-        })
-
-        const fetchData = await Promise.all(fetchPromises)
-
-        // Build fetch results summary
-        const fetchResults_list: string[] = []
-        for (const r of fetchData) {
-          if (r.success && r.content) {
-            fetchResults_list.push(`## ${r.url}\n\n${r.content.substring(0, 5000)}\n\n---`)
-          }
-        }
-        fetchResults = fetchResults_list.join('\n\n')
-      } catch (e) {
-        console.error('[WEBSEARCH] Fetch failed:', e)
-        fetchResults = 'Note: Could not fetch details from sources.'
-      }
-    }
-
-    onProgress?.({
-      type: 'web_search',
-      status: 'complete',
-      message: `Found ${resultCount} results, fetched ${topUrls.length} sources. Ready to synthesize.`,
+      message: `Found ${resultCount} results.`,
     })
 
     const endTime = performance.now()
 
-    // Combine everything
+    // Return just search results - let skill call web_fetch separately
     const searchText = JSON.stringify(searchData, null, 2)
-    const combinedResults = `SEARCH RESULTS:\n\n${searchText}\n\n---\n\nFETCHED CONTENT:\n\n${fetchResults}`
 
     return {
       data: {
         query,
-        results: [combinedResults],
+        results: [searchText],
         durationSeconds: (endTime - startTime) / 1000,
       }
     }
