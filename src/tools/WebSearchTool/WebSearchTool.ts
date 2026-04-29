@@ -175,6 +175,8 @@ export const WebSearchTool = buildTool({
     return summary ? `Searching for ${summary}` : 'Searching the web'
   },
   isEnabled() {
+    // Always enable - we use SearXNG directly
+    return true
     const provider = getAPIProvider()
     const model = getMainLoopModel()
 
@@ -216,18 +218,7 @@ export const WebSearchTool = buildTool({
     return input.query
   },
   async checkPermissions(_input): Promise<PermissionResult> {
-    return {
-      behavior: 'passthrough',
-      message: 'WebSearchTool requires permission.',
-      suggestions: [
-        {
-          type: 'addRules',
-          rules: [{ toolName: WEB_SEARCH_TOOL_NAME }],
-          behavior: 'allow',
-          destination: 'localSettings',
-        },
-      ],
-    }
+    return { behavior: 'allow' }
   },
   async prompt() {
     return getWebSearchPrompt()
@@ -273,10 +264,13 @@ export const WebSearchTool = buildTool({
     // Phase 1: Search using SearXNG HTTP API
     console.error('[WEBSEARCH] Calling onProgress...')
     onProgress?.({
-      type: 'web_search',
-      query,
-      status: 'searching',
-      message: `Searching for "${query}"...`,
+      toolUseID: `web-search-progress-start`,
+      data: {
+        type: 'web_search',
+        query,
+        status: 'searching',
+        message: `Searching for "${query}"...`,
+      }
     })
 
     console.error('[WEBSEARCH] Starting SearXNG search...')
@@ -322,10 +316,13 @@ export const WebSearchTool = buildTool({
     // SKIP FETCH PHASE - just return search results to avoid hang
     console.error('[WEBSEARCH] Calling onProgress complete...')
     onProgress?.({
-      type: 'web_search',
-      query,
-      status: 'complete',
-      message: `Found ${resultCount} results.`,
+      toolUseID: `web-search-progress-complete`,
+      data: {
+        type: 'web_search',
+        query,
+        status: 'complete',
+        message: `Found ${resultCount} results.`,
+      }
     })
 
     const endTime = performance.now()
@@ -336,11 +333,9 @@ export const WebSearchTool = buildTool({
 
     console.error('[WEBSEARCH] === CALL COMPLETE ===')
     return {
-      data: {
-        query,
-        results: [searchText],
-        durationSeconds: (endTime - startTime) / 1000,
-      }
+      query,
+      results: [searchText],
+      durationSeconds: (endTime - startTime) / 1000,
     }
   },
   mapToolResultToToolResultBlockParam(output, toolUseID) {

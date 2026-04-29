@@ -1,4 +1,4 @@
-export const WEB_SEARCH_TOOL_NAME = 'web_search'
+export const WEB_SEARCH_TOOL_NAME = 'searxng_search'
 
 export const WEB_SEARCH_PROMPT = `
 # Web Search Tool
