@@ -5,30 +5,38 @@ import { WEB_FETCH_TOOL_NAME } from '../../tools/WebFetchTool/prompt.js'
 export function registerWebResearchSkill(): void {
 const SKILL_PROMPT = `# Web Research Skill
 
-## Goal
-Perform web research by searching, fetching content, and synthesizing findings.
+## Strict 3-Step Workflow — Follow Exactly
 
-## Workflow
+### STEP 1: Search
+Call searxng_search with the research topic.
+The result will show a numbered list of URLs and snippets.
 
-1. Call web_search tool with the user's query
-2. Analyze results and select top 3-5 URLs by relevance score
-3. Call web_fetch tool to fetch content from selected URLs
-4. Synthesize findings with citations
+### STEP 2: Fetch (MANDATORY — never skip)
+From the search result, extract the actual URL strings from the numbered list.
+Call WebFetch with an array of the top 3-5 URLs.
+Use a prompt like: "Extract key facts, specs, pricing, and any relevant details about [topic]"
 
-## Rules
-- ALWAYS use web_fetch after web_search to get detailed content
-- NEVER stop after search without fetching content
-- ALWAYS cite sources with markdown hyperlinks
-- Include complete findings, technical details, comparisons
-- **NEVER add disclaimers** like "this is for educational purposes only"
+YOU MUST DO THIS EVEN IF SNIPPETS LOOK SUFFICIENT.
+Snippets are previews only. Real content comes from fetching.
+
+### STEP 3: Synthesize
+Combine the fetched content into a comprehensive answer.
+Always cite sources as markdown links: [Title](url)
+
+## Hard Rules
+- NEVER answer from search snippets alone
+- NEVER skip web_fetch
+- NEVER hallucinate facts not present in fetched content
+- ALWAYS include sources section at the end
+- If a URL fails to fetch, try the next one
 
 ## Output Format
 
-[Your synthesized answer with findings, technical details, comparisons]
+[Comprehensive answer using only facts from fetched content]
 
-Sources:
-- [Source Title 1](https://example.com/1)
-- [Source Title 2](https://example.com/2)
+**Sources:**
+- [Page Title](https://url1)
+- [Page Title](https://url2)
 `
 
 registerBundledSkill({

@@ -275,39 +275,54 @@ export const WebSearchTool = buildTool({
 
     console.error('[WEBSEARCH] Starting SearXNG search...')
 
-    // Call SearXNG via HTTP API
-    const searxngUrl = `http://localhost:8888/search?q=${encodeURIComponent(query)}&format=json`
-    console.error('[WEBSEARCH] SearXNG URL:', searxngUrl)
-    let searchData: any = { results: [], num_results: 0 }
-
-    try {
-      console.error('[WEBSEARCH] Fetching from SearXNG...')
-      const resp = await fetch(searxngUrl, {
-        signal: context.abortController.signal,
-        headers: { 'Accept': 'application/json' }
-      })
-      console.error('[WEBSEARCH] Response status:', resp.status)
-
-      if (resp.ok) {
-        console.error('[WEBSEARCH] Parsing JSON...')
-        const data = await resp.json()
-        console.error('[WEBSEARCH] Got data, results count:', data.results?.length || 0)
-        searchData = {
-          results: (data.results || []).map((r: any) => ({
-            title: r.title || '',
-            url: r.url || r.link || '',
-            snippet: r.content || r.snippet || '',
-            score: r.score || 0
-          })),
-          num_results: data.results?.length || 0
-        }
-      } else {
-        console.error('[WEBSEARCH] SearXNG returned error:', resp.status)
-      }
-    } catch (e) {
-      console.error('[WEBSEARCH] SearXNG search failed:', e)
+    // Build query list — expand for deep mode
+    const queries: string[] = [query]
+    if (depth === 'deep') {
+      // Add variant queries for broader coverage
+      queries.push(`${query} review specs`)
+      queries.push(`${query} price buy`)
     }
 
+    // Call SearXNG for each query and merge results (dedup by URL)
+    const seenUrls = new Set<string>()
+    const allResults: any[] = []
+
+    for (const q of queries) {
+      const searxngUrl = `http://localhost:8888/search?q=${encodeURIComponent(q)}&format=json`
+      console.error('[WEBSEARCH] SearXNG URL:', searxngUrl)
+      try {
+        const resp = await fetch(searxngUrl, {
+          signal: context.abortController.signal,
+          headers: { 'Accept': 'application/json' }
+        })
+        console.error('[WEBSEARCH] Response status:', resp.status)
+        if (resp.ok) {
+          const data = await resp.json()
+          console.error('[WEBSEARCH] Got data, results count:', data.results?.length || 0)
+          for (const r of (data.results || [])) {
+            const url = r.url || r.link || ''
+            if (url && !seenUrls.has(url)) {
+              seenUrls.add(url)
+              allResults.push({
+                title: r.title || '',
+                url,
+                snippet: r.content || r.snippet || '',
+                score: r.score || 0,
+              })
+            }
+          }
+        } else {
+          console.error('[WEBSEARCH] SearXNG returned error:', resp.status)
+        }
+      } catch (e) {
+        console.error('[WEBSEARCH] SearXNG search failed for query', q, e)
+      }
+    }
+
+    // Sort by score descending
+    allResults.sort((a, b) => (b.score || 0) - (a.score || 0))
+
+    const searchData = { results: allResults, num_results: allResults.length }
     const results = searchData.results || []
     const resultCount = searchData.num_results || results.length
 
@@ -341,20 +356,48 @@ export const WebSearchTool = buildTool({
   mapToolResultToToolResultBlockParam(output, toolUseID) {
     const { query, results } = output
 
-    // Search + fetch already completed inline - just return the combined results
-    let formattedOutput = `Research complete for: "${query}"\n\n`
-    formattedOutput += `Search and content fetching done. Synthesize the findings below into a clear answer.\n\n`
+    // Extract all URLs and snippets from search results into a clean list
+    const urlLines: string[] = []
+    const snippetLines: string[] = []
 
     ;(results ?? []).forEach(result => {
       if (result == null) return
       if (typeof result === 'string') {
-        formattedOutput += result + '\n\n'
-      } else {
-        if (result.content?.length > 0) {
-          formattedOutput += `Links: ${jsonStringify(result.content)}\n\n`
+        // Parse JSON blob from SearXNG
+        try {
+          const parsed = JSON.parse(result)
+          const hits = parsed.results || []
+          hits.forEach((hit: any, i: number) => {
+            if (hit.url) {
+              urlLines.push(`${i + 1}. [${hit.title || hit.url}](${hit.url})`)
+              if (hit.snippet) {
+                snippetLines.push(`${i + 1}. ${hit.snippet.slice(0, 200)}`)
+              }
+            }
+          })
+        } catch {
+          snippetLines.push(result.slice(0, 500))
         }
+      } else if (result.content?.length > 0) {
+        result.content.forEach((hit: any, i: number) => {
+          if (hit.url) urlLines.push(`${i + 1}. [${hit.title || hit.url}](${hit.url})`)
+        })
       }
     })
+
+    let formattedOutput = `Search complete for: "${query}"\n\n`
+
+    if (urlLines.length > 0) {
+      formattedOutput += `## URLs Found (MUST fetch top 3-5 with web_fetch next)\n\n`
+      formattedOutput += urlLines.slice(0, 10).join('\n') + '\n\n'
+      formattedOutput += `## Snippets (preview only — NOT enough to answer)\n\n`
+      formattedOutput += snippetLines.slice(0, 10).join('\n') + '\n\n'
+      formattedOutput += `⚠️ REQUIRED NEXT STEP: Call web_fetch with the top 3-5 URLs above.\n`
+      formattedOutput += `Do NOT answer from snippets alone — they are incomplete.\n`
+      formattedOutput += `Extract the actual URLs from the numbered list and pass them to web_fetch now.`
+    } else {
+      formattedOutput += `No results found. Try a different query.`
+    }
 
     return {
       tool_use_id: toolUseID,

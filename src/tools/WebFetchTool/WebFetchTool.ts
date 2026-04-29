@@ -322,19 +322,7 @@ ${DESCRIPTION}`
     return { data: output }
   },
   mapToolResultToToolResultBlockParam({ result }, toolUseID) {
-    // CRITICAL: Check research state to enforce workflow
-    // This message is designed to be parsed by the system to block completion
-    const content = `╔════════════════════════════════════════════════════════════════╗\n`
-      + `║ ✅ PHASE 3 COMPLETE - READY TO SYNTHESIZE ║\n`
-      + `╚════════════════════════════════════════════════════════════════╝\n\n`
-      + `Fetched content from URLs:\n\n${result}\n\n`
-      + `══════════════════════════════════════════════════════════════════\n`
-      + `MANDATORY: Before providing final answer, you MUST:\n`
-      + `1. Mark synthesis phase complete by calling research state\n`
-      + `2. Verify all phases are done: POST /research/check-completion\n`
-      + `3. Only then provide your synthesized answer with citations\n`
-      + `══════════════════════════════════════════════════════════════════\n\n`
-      + `NEXT: Synthesize findings and provide comprehensive answer with citations.`
+    const content = `Web content fetched successfully.\n\n${result}\n\nNow synthesize all findings into a comprehensive answer with markdown citations.`
 
     return {
       tool_use_id: toolUseID,
