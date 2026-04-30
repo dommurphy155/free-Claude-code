@@ -82,12 +82,12 @@ The bridge maps Anthropic model names to NVIDIA models:
 
 | Anthropic Model | NVIDIA Model |
 |----------------|--------------|
-| claude-sonnet-4-6 | moonshotai/kimi-k2.5 |
-| claude-opus-4-6 | moonshotai/kimi-k2.5 |
-| claude-haiku-4-5 | moonshotai/kimi-k2.5 |
-| sonnet | moonshotai/kimi-k2.5 |
-| opus | moonshotai/kimi-k2.5 |
-| haiku | moonshotai/kimi-k2.5 |
+| claude-sonnet-4-6 | google/gemma-4-31b-it |
+| claude-opus-4-6 | google/gemma-4-31b-it |
+| claude-haiku-4-5 | google/gemma-4-31b-it |
+| sonnet | google/gemma-4-31b-it |
+| opus | google/gemma-4-31b-it |
+| haiku | google/gemma-4-31b-it |
 
 ## Web Tools
 

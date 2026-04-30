@@ -339,7 +339,7 @@ class MediaProcessor:
 
             llm_url = 'https://integrate.api.nvidia.com/v1/chat/completions'
             payload = {
-                'model': 'moonshotai/kimi-k2.5',
+                'model': 'google/gemma-4-31b-it',
                 'messages': [
                     {
                         'role': 'user',

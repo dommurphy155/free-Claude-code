@@ -1,10 +1,4 @@
-
 #!/usr/bin/env python3
-"""
-Claude Code Simple Bridge
-Proxies Anthropic API requests to Keymaster (NVIDIA/OpenAI-compatible).
-"""
-
 import json
 import os
 import sys
@@ -17,59 +11,18 @@ import httpx
 
 KEYMASTER_URL = os.getenv("KEYMASTER_URL", "http://127.0.0.1:8787")
 
-USE_DIRECT_API = os.getenv("USE_DIRECT_API", "0") == "1"
-NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY", "")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-
-NVIDIA_API_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
-OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
-ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
-
 MODEL_MAP = {
-    "claude-sonnet-4-6": "moonshotai/kimi-k2.5",
-    "claude-opus-4-6": "moonshotai/kimi-k2.5",
-    "claude-haiku-4-5": "meta/llama-3.3-70b-instruct",
-    "claude-haiku-4-5-20251001": "meta/llama-3.3-70b-instruct",
-    "sonnet": "moonshotai/kimi-k2.5",
-    "opus": "moonshotai/kimi-k2.5",
-    "haiku": "moonshotai/kimi-k2.5",
-    "claude-haiku-4-5": "moonshotai/kimi-k2.5",
-    "claude-haiku-4-5-20251001": "moonshotai/kimi-k2.5",
-    "claude-3-5-haiku": "moonshotai/kimi-k2.5",
-    "claude-3-5-haiku-20241022": "moonshotai/kimi-k2.5",
-    "haiku": "meta/llama-3.3-70b-instruct",
+    "claude-opus-4-6": "google/gemma-4-31b-it",
+    "opus": "google/gemma-4-31b-it",
+    "claude-sonnet-4-6": "google/gemma-4-31b-it",
+    "sonnet": "deepseek-ai/deepseek-v4-pro",
+    "claude-haiku-4-5": "deepseek-ai/deepseek-v4-flash",
+    "claude-haiku-4-5-20251001": "deepseek-ai/deepseek-v4-flash",
+    "claude-3-5-haiku": "deepseek-ai/deepseek-v4-flash",
+    "claude-3-5-haiku-20241022": "deepseek-ai/deepseek-v4-flash",
+    "haiku": "deepseek-ai/deepseek-v4-flash",
 }
 
-DIRECT_MODEL_MAP = {
-    "claude-sonnet-4-6": "moonshotai/kimi-k2.5",
-    "claude-opus-4-6": "moonshotai/kimi-k2.5",
-    "claude-haiku-4-5": "meta/llama-3.3-70b-instruct",
-    "claude-haiku-4-5-20251001": "meta/llama-3.3-70b-instruct",
-    "sonnet": "moonshotai/kimi-k2.5",
-    "opus": "moonshotai/kimi-k2.5",
-    "haiku": "moonshotai/kimi-k2.5",
-    "claude-haiku-4-5": "moonshotai/kimi-k2.5",
-    "claude-haiku-4-5-20251001": "moonshotai/kimi-k2.5",
-    "claude-3-5-haiku": "moonshotai/kimi-k2.5",
-    "claude-3-5-haiku-20241022": "moonshotai/kimi-k2.5",
-    "haiku": "meta/llama-3.3-70b-instruct",
-}
-
-DEFAULT_DIRECT_MODEL = os.getenv("DEFAULT_DIRECT_MODEL", "moonshotai/kimi-k2.5")
-
-def get_api_config():
-    if USE_DIRECT_API:
-        if NVIDIA_API_KEY:
-            return NVIDIA_API_URL, {"Authorization": f"Bearer {NVIDIA_API_KEY}", "Content-Type": "application/json"}
-        elif OPENAI_API_KEY:
-            return OPENAI_API_URL, {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
-        elif ANTHROPIC_API_KEY:
-            return ANTHROPIC_API_URL, {"Authorization": f"Bearer {ANTHROPIC_API_KEY}", "Content-Type": "application/json"}
-        else:
-            return NVIDIA_API_URL, {"Content-Type": "application/json"}
-    else:
-        return f"{KEYMASTER_URL}/v1/chat/completions", {"Content-Type": "application/json"}
 
 http_client: httpx.AsyncClient = None
 
@@ -80,6 +33,7 @@ async def lifespan(app: FastAPI):
         timeout=httpx.Timeout(300.0, connect=10.0, read=120.0, write=30.0, pool=60.0),
         limits=httpx.Limits(max_connections=200, max_keepalive_connections=50),
         follow_redirects=True,
+        http2=True,
     )
     print("[BRIDGE] HTTP client started", file=sys.stderr, flush=True)
     try:
@@ -93,11 +47,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-
 @app.get("/health")
 async def health():
     return {"status": "ok", "keymaster": KEYMASTER_URL, "version": "2.1.0"}
-
 
 def convert_messages(body):
     msgs = []
@@ -123,7 +75,7 @@ def convert_messages(body):
                     "content": "\n".join(text_parts) if text_parts else None,
                     "tool_calls": [
                         {
-                            "id": tu.get("id") or f'call_{uuid.uuid4().hex[:8]}',
+                            "id": tu.get("id", "call_0"),
                             "type": "function",
                             "function": {
                                 "name": tu.get("name", ""),
@@ -142,7 +94,7 @@ def convert_messages(body):
                         tr_content = "\n".join(b.get("text", "") for b in tr_content if isinstance(b, dict))
                     msgs.append({
                         "role": "tool",
-                        "tool_call_id": tr.get("tool_use_id") or f'call_{uuid.uuid4().hex[:8]}',
+                        "tool_call_id": tr.get("tool_use_id", "call_0"),
                         "content": tr_content
                     })
                 if text_parts:
@@ -157,12 +109,8 @@ def convert_messages(body):
 
     return msgs
 
-
 def build_openai_body(body, anthropic_model):
-    if USE_DIRECT_API:
-        model = DIRECT_MODEL_MAP.get(anthropic_model, DEFAULT_DIRECT_MODEL)
-    else:
-        model = MODEL_MAP.get(anthropic_model, "moonshotai/kimi-k2.5")
+    model = MODEL_MAP.get(anthropic_model)
 
     openai_body = {
         "model": model,
@@ -189,7 +137,6 @@ def build_openai_body(body, anthropic_model):
 
     return openai_body
 
-
 @app.post("/v1/messages")
 async def messages(request: Request):
     request_id = uuid.uuid4().hex[:8]
@@ -202,7 +149,8 @@ async def messages(request: Request):
         print(f"[BRIDGE:{request_id}] model={anthropic_model} stream={stream}", file=sys.stderr)
 
         openai_body = build_openai_body(body, anthropic_model)
-        api_url, headers = get_api_config()
+        api_url = f"{KEYMASTER_URL}/v1/chat/completions"
+        headers = {"Content-Type": "application/json"}
 
         if stream:
             async def generate():
@@ -217,39 +165,37 @@ async def messages(request: Request):
                     async with http_client.stream("POST", api_url, json=openai_body, headers=headers,
                                                    timeout=httpx.Timeout(600.0)) as resp:
                         async for line in resp.aiter_lines():
-                            line = line.strip()
-                            if not line.startswith("data: "):
-                                continue
-                            data = line[6:]
-                            if data == "[DONE]":
-                                break
-                            try:
-                                chunk = json.loads(data)
-                                delta = chunk["choices"][0].get("delta", {}) or {}
-                                text = delta.get("content") or ""
-                                if text:
-                                    full_content += text
-                                    yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'text_delta', 'text': text}})}\n\n"
-                                for tc in delta.get("tool_calls", []) or []:
-                                    idx = tc.get("index", 0)
-                                    if idx not in tool_call_chunks:
-                                        tool_call_chunks[idx] = {"id": tc.get("id", f"call_{idx}"), "name": "", "arguments": ""}
-                                        yield f"event: content_block_start\ndata: {json.dumps({'type': 'content_block_start', 'index': idx + 1, 'content_block': {'type': 'tool_use', 'id': tool_call_chunks[idx]['id'], 'name': tc.get('function', {}).get('name', ''), 'input': {}}})}\n\n"
-                                    if tc.get("function", {}).get("name"):
-                                        tool_call_chunks[idx]["name"] += tc["function"]["name"]
-                                    if tc.get("function", {}).get("arguments"):
-                                        tool_call_chunks[idx]["arguments"] += tc["function"]["arguments"]
-                                        yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': idx + 1, 'delta': {'type': 'input_json_delta', 'partial_json': tc['function']['arguments']}})}\n\n"
-                            except Exception:
-                                pass
+                            if line.startswith("data: "):
+                                data = line[6:]
+                                if data == "[DONE]":
+                                    break
+                                try:
+                                    chunk = json.loads(data)
+                                    delta = chunk["choices"][0].get("delta", {}) or {}
+                                    text = delta.get("content") or ""
+                                    if text:
+                                        full_content += text
+                                        yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'text_delta', 'text': text}})}\n\n"
+                                    for tc in delta.get("tool_calls", []) or []:
+                                        idx = tc.get("index", 0)
+                                        if idx not in tool_call_chunks:
+                                            tool_call_chunks[idx] = {"id": tc.get("id", f"call_{idx}"), "name": "", "arguments": ""}
+                                        if tc.get("function", {}).get("name"):
+                                            tool_call_chunks[idx]["name"] += tc["function"]["name"]
+                                        if tc.get("function", {}).get("arguments"):
+                                            tool_call_chunks[idx]["arguments"] += tc["function"]["arguments"]
+                                except Exception:
+                                    pass
                 except Exception as e:
                     print(f"[BRIDGE:{request_id}] Stream error: {e}", file=sys.stderr)
 
                 yield f"event: content_block_stop\ndata: {json.dumps({'type': 'content_block_stop', 'index': 0})}\n\n"
 
                 if tool_call_chunks:
-                    for idx in tool_call_chunks:
-                        yield f"event: content_block_stop\ndata: {json.dumps({'type': 'content_block_stop', 'index': idx + 1})}\n\n"
+                    for i, (idx, tc) in enumerate(tool_call_chunks.items(), start=1):
+                        yield f"event: content_block_start\ndata: {json.dumps({'type': 'content_block_start', 'index': i, 'content_block': {'type': 'tool_use', 'id': tc['id'], 'name': tc['name'], 'input': {}}})}\n\n"
+                        yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': i, 'delta': {'type': 'input_json_delta', 'partial_json': tc['arguments']}})}\n\n"
+                        yield f"event: content_block_stop\ndata: {json.dumps({'type': 'content_block_stop', 'index': i})}\n\n"
                     stop_reason = "tool_use"
                 else:
                     stop_reason = "end_turn"
@@ -295,7 +241,7 @@ async def messages(request: Request):
                     })
                 stop_reason = "tool_use"
             else:
-                content_blocks.append({"type": "text", "text": message.get("content") or message.get("reasoning") or ""})
+                content_blocks.append({"type": "text", "text": message.get("content", "")})
                 stop_reason = "end_turn"
 
             return JSONResponse(content={

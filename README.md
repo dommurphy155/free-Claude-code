@@ -205,13 +205,13 @@ curl -X POST http://localhost:8789/cdp/search \
 
 ## Model Support
 
-Currently configured for `moonshotai/kimi-k2.5` via the NVIDIA API. The model mapping happens in `simple_bridge.py`:
+Currently configured for `google/gemma-4-31b-it` via the NVIDIA API. The model mapping happens in `simple_bridge.py`:
 
 ```python
 MODEL_MAP = {
-    "claude-sonnet-4-6": "moonshotai/kimi-k2.5",
-    "claude-opus-4-6": "moonshotai/kimi-k2.5",
-    "claude-haiku-4-5": "moonshotai/kimi-k2.5",
+    "claude-sonnet-4-6": "google/gemma-4-31b-it",
+    "claude-opus-4-6": "google/gemma-4-31b-it",
+    "claude-haiku-4-5": "google/gemma-4-31b-it",
     # ... etc
 }
 ```

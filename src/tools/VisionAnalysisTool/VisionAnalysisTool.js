@@ -5,7 +5,7 @@ import { logError } from '../../utils/log.js';
 import { existsSync } from 'fs';
 import { readFile } from 'fs/promises';
 const LLM_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
-const LLM_MODEL = 'moonshotai/kimi-k2.5';
+const LLM_MODEL = 'google/gemma-4-31b-it';
 function getNvidiaApiKey() {
     return process.env.NVIDIA_API_KEY || '';
 }
