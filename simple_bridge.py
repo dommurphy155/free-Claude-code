@@ -123,20 +123,28 @@ def build_openai_body(body, anthropic_model):
         "stream": body.get("stream", False),
     }
 
+    # Filter out Anthropic-native server tools that OpenAI backends don't support
+    _NATIVE_TOOL_TYPES = frozenset({
+        "web_search_20250305", "computer_20251022",
+        "bash_20250124", "text_editor_20250124",
+    })
     tools = body.get("tools", [])
     if tools:
-        openai_body["tools"] = [
+        function_tools = [
             {
                 "type": "function",
                 "function": {
                     "name": t["name"],
                     "description": t.get("description", ""),
-                    "parameters": t.get("input_schema", {})
-                }
+                    "parameters": t.get("input_schema", {}),
+                },
             }
             for t in tools
+            if t.get("type") not in _NATIVE_TOOL_TYPES
         ]
-        openai_body["tool_choice"] = "auto"
+        if function_tools:
+            openai_body["tools"] = function_tools
+            openai_body["tool_choice"] = "auto"
 
     return openai_body
 
