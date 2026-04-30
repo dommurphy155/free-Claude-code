@@ -24,7 +24,7 @@ import {
 
 const inputSchema = lazySchema(() =>
   z.strictObject({
-    query: z.string().min(2).describe('The search query to use'),
+    query: z.string().min(0).optional().default('').describe('The search query to use'),
     depth: z
       .enum(['fast', 'standard', 'deep'])
       .optional()
@@ -240,10 +240,9 @@ export const WebSearchTool = buildTool({
     if (!input.query || typeof input.query !== 'string') {
       return { result: false, message: 'Error: Missing or invalid query', errorCode: 1 }
     }
-    // Safely destructure query for validation
-    const queryValue = input.query
-    const allowed_domains = input.allowed_domains
-    const blocked_domains = input.blocked_domains
+    const queryValue = input?.query ?? ''
+    const allowed_domains = input?.allowed_domains
+    const blocked_domains = input?.blocked_domains
     if (!queryValue.length) {
       return {
         result: false,
@@ -275,7 +274,8 @@ export const WebSearchTool = buildTool({
     if (!input || typeof input.query !== 'string') {
       return { query: '', results: ['Error: no query provided'], durationSeconds: 0 }
     }
-    const { query, depth = 'standard' } = input
+    const query = input?.query ?? ''
+    const depth = input?.depth ?? 'standard'
 
     console.error('[WEBSEARCH] Query:', query, 'Depth:', depth)
 
