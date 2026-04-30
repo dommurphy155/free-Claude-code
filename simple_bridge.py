@@ -12,9 +12,9 @@ import httpx
 KEYMASTER_URL = os.getenv("KEYMASTER_URL", "http://127.0.0.1:8787")
 
 MODEL_MAP = {
-    "claude-opus-4-6": "google/gemma-4-31b-it",
-    "opus": "google/gemma-4-31b-it",
-    "claude-sonnet-4-6": "google/gemma-4-31b-it",
+    "claude-opus-4-6": "nvidia/nemotron-3-super-120b-a12b",
+    "opus": "nvidia/nemotron-3-super-120b-a12b",
+    "claude-sonnet-4-6": "nvidia/nemotron-3-super-120b-a12b",
     "sonnet": "deepseek-ai/deepseek-v4-pro",
     "claude-haiku-4-5": "deepseek-ai/deepseek-v4-flash",
     "claude-haiku-4-5-20251001": "deepseek-ai/deepseek-v4-flash",
@@ -152,109 +152,116 @@ async def messages(request: Request):
         api_url = f"{KEYMASTER_URL}/v1/chat/completions"
         headers = {"Content-Type": "application/json"}
 
+        # Always force streaming upstream
+        openai_body["stream"] = True
+
+        async def do_stream():
+            msg_id = f"msg_{uuid.uuid4().hex[:12]}"
+            yield f"event: message_start\ndata: {json.dumps({'type': 'message_start', 'message': {'id': msg_id, 'type': 'message', 'role': 'assistant', 'content': [], 'model': anthropic_model, 'usage': {'input_tokens': 0, 'output_tokens': 0}}})}\n\n"
+            yield f"event: content_block_start\ndata: {json.dumps({'type': 'content_block_start', 'index': 0, 'content_block': {'type': 'text', 'text': ''}})}\n\n"
+
+            full_content = ""
+            tool_call_chunks = {}
+
+            try:
+                async with http_client.stream("POST", api_url, json=openai_body, headers=headers,
+                                               timeout=httpx.Timeout(600.0)) as resp:
+                    async for line in resp.aiter_lines():
+                        if line.startswith("data: "):
+                            data = line[6:]
+                            if data == "[DONE]":
+                                break
+                            try:
+                                chunk = json.loads(data)
+                                delta = chunk["choices"][0].get("delta", {}) or {}
+                                text = delta.get("content") or ""
+                                if text:
+                                    full_content += text
+                                    yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'text_delta', 'text': text}})}\n\n"
+                                for tc in delta.get("tool_calls", []) or []:
+                                    idx = tc.get("index", 0)
+                                    if idx not in tool_call_chunks:
+                                        tool_call_chunks[idx] = {"id": tc.get("id", f"call_{idx}"), "name": "", "arguments": ""}
+                                    if tc.get("function", {}).get("name"):
+                                        tool_call_chunks[idx]["name"] += tc["function"]["name"]
+                                    if tc.get("function", {}).get("arguments"):
+                                        tool_call_chunks[idx]["arguments"] += tc["function"]["arguments"]
+                            except Exception:
+                                pass
+            except Exception as e:
+                print(f"[BRIDGE:{request_id}] Stream error: {e}", file=sys.stderr)
+
+            yield f"event: content_block_stop\ndata: {json.dumps({'type': 'content_block_stop', 'index': 0})}\n\n"
+
+            if tool_call_chunks:
+                for i, (idx, tc) in enumerate(tool_call_chunks.items(), start=1):
+                    yield f"event: content_block_start\ndata: {json.dumps({'type': 'content_block_start', 'index': i, 'content_block': {'type': 'tool_use', 'id': tc['id'], 'name': tc['name'], 'input': {}}})}\n\n"
+                    yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': i, 'delta': {'type': 'input_json_delta', 'partial_json': tc['arguments']}})}\n\n"
+                    yield f"event: content_block_stop\ndata: {json.dumps({'type': 'content_block_stop', 'index': i})}\n\n"
+                stop_reason = "tool_use"
+            else:
+                stop_reason = "end_turn"
+
+            yield f"event: message_delta\ndata: {json.dumps({'type': 'message_delta', 'delta': {'stop_reason': stop_reason}, 'usage': {'input_tokens': 0, 'output_tokens': max(1, len(full_content) // 4)}})}\n\n"
+            yield f"event: message_stop\ndata: {json.dumps({'type': 'message_stop'})}\n\n"
+
         if stream:
-            async def generate():
-                msg_id = f"msg_{uuid.uuid4().hex[:12]}"
-                yield f"event: message_start\ndata: {json.dumps({'type': 'message_start', 'message': {'id': msg_id, 'type': 'message', 'role': 'assistant', 'content': [], 'model': anthropic_model, 'usage': {'input_tokens': 0, 'output_tokens': 0}}})}\n\n"
-                yield f"event: content_block_start\ndata: {json.dumps({'type': 'content_block_start', 'index': 0, 'content_block': {'type': 'text', 'text': ''}})}\n\n"
-
-                full_content = ""
-                tool_call_chunks = {}
-
-                try:
-                    async with http_client.stream("POST", api_url, json=openai_body, headers=headers,
-                                                   timeout=httpx.Timeout(600.0)) as resp:
-                        async for line in resp.aiter_lines():
-                            if line.startswith("data: "):
-                                data = line[6:]
-                                if data == "[DONE]":
-                                    break
-                                try:
-                                    chunk = json.loads(data)
-                                    delta = chunk["choices"][0].get("delta", {}) or {}
-                                    text = delta.get("content") or ""
-                                    if text:
-                                        full_content += text
-                                        yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'text_delta', 'text': text}})}\n\n"
-                                    for tc in delta.get("tool_calls", []) or []:
-                                        idx = tc.get("index", 0)
-                                        if idx not in tool_call_chunks:
-                                            tool_call_chunks[idx] = {"id": tc.get("id", f"call_{idx}"), "name": "", "arguments": ""}
-                                        if tc.get("function", {}).get("name"):
-                                            tool_call_chunks[idx]["name"] += tc["function"]["name"]
-                                        if tc.get("function", {}).get("arguments"):
-                                            tool_call_chunks[idx]["arguments"] += tc["function"]["arguments"]
-                                except Exception:
-                                    pass
-                except Exception as e:
-                    print(f"[BRIDGE:{request_id}] Stream error: {e}", file=sys.stderr)
-
-                yield f"event: content_block_stop\ndata: {json.dumps({'type': 'content_block_stop', 'index': 0})}\n\n"
-
-                if tool_call_chunks:
-                    for i, (idx, tc) in enumerate(tool_call_chunks.items(), start=1):
-                        yield f"event: content_block_start\ndata: {json.dumps({'type': 'content_block_start', 'index': i, 'content_block': {'type': 'tool_use', 'id': tc['id'], 'name': tc['name'], 'input': {}}})}\n\n"
-                        yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': i, 'delta': {'type': 'input_json_delta', 'partial_json': tc['arguments']}})}\n\n"
-                        yield f"event: content_block_stop\ndata: {json.dumps({'type': 'content_block_stop', 'index': i})}\n\n"
-                    stop_reason = "tool_use"
-                else:
-                    stop_reason = "end_turn"
-
-                yield f"event: message_delta\ndata: {json.dumps({'type': 'message_delta', 'delta': {'stop_reason': stop_reason}, 'usage': {'input_tokens': 0, 'output_tokens': len(full_content) // 4 or 1}})}\n\n"
-                yield f"event: message_stop\ndata: {json.dumps({'type': 'message_stop'})}\n\n"
-
             return StreamingResponse(
-                generate(),
+                do_stream(),
                 media_type="text/event-stream",
                 headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
             )
-
         else:
+            # Collect stream into non-stream response
+            full_text = ""
+            tool_call_chunks = {}
+            stop_reason = "end_turn"
             msg_id = f"msg_{uuid.uuid4().hex[:12]}"
-            resp = await http_client.post(api_url, json=openai_body, headers=headers,
-                                          timeout=httpx.Timeout(600.0))
 
-            if resp.status_code != 200:
-                return JSONResponse(content={
-                    "id": msg_id, "type": "message", "role": "assistant",
-                    "content": [{"type": "text", "text": f"Error: upstream returned {resp.status_code}: {resp.text[:200]}"}],
-                    "model": anthropic_model, "stop_reason": "error"
-                })
-
-            openai_resp = resp.json()
-            message = openai_resp.get("choices", [{}])[0].get("message", {})
-            content_blocks = []
-
-            if message.get("tool_calls"):
-                if message.get("content"):
-                    content_blocks.append({"type": "text", "text": message["content"]})
-                for tc in message["tool_calls"]:
+            async for event in do_stream():
+                line = event.decode() if isinstance(event, bytes) else event
+                for part in line.split("\n"):
+                    if not part.startswith("data: "):
+                        continue
                     try:
-                        input_data = json.loads(tc["function"]["arguments"])
+                        data = json.loads(part[6:])
+                        t = data.get("type", "")
+                        if t == "content_block_start":
+                            cb = data.get("content_block", {})
+                            if cb.get("type") == "tool_use":
+                                idx = data.get("index", 1) - 1
+                                tool_call_chunks[idx] = {"id": cb["id"], "name": cb["name"], "arguments": ""}
+                        elif t == "content_block_delta":
+                            delta = data.get("delta", {})
+                            if delta.get("type") == "text_delta":
+                                full_text += delta.get("text", "")
+                            elif delta.get("type") == "input_json_delta":
+                                idx = data.get("index", 1) - 1
+                                if idx in tool_call_chunks:
+                                    tool_call_chunks[idx]["arguments"] += delta.get("partial_json", "")
+                        elif t == "message_delta":
+                            stop_reason = data.get("delta", {}).get("stop_reason", "end_turn")
+                    except Exception:
+                        pass
+
+            content_blocks = []
+            if tool_call_chunks:
+                if full_text:
+                    content_blocks.append({"type": "text", "text": full_text})
+                for idx, tc in sorted(tool_call_chunks.items()):
+                    try:
+                        input_data = json.loads(tc["arguments"])
                     except Exception:
                         input_data = {}
-                    content_blocks.append({
-                        "type": "tool_use",
-                        "id": tc.get("id", "call_0"),
-                        "name": tc["function"]["name"],
-                        "input": input_data,
-                    })
-                stop_reason = "tool_use"
+                    content_blocks.append({"type": "tool_use", "id": tc["id"], "name": tc["name"], "input": input_data})
             else:
-                content_blocks.append({"type": "text", "text": message.get("content", "")})
-                stop_reason = "end_turn"
+                content_blocks.append({"type": "text", "text": full_text})
 
             return JSONResponse(content={
-                "id": openai_resp.get("id", msg_id),
-                "type": "message",
-                "role": "assistant",
-                "content": content_blocks,
-                "model": anthropic_model,
+                "id": msg_id, "type": "message", "role": "assistant",
+                "content": content_blocks, "model": anthropic_model,
                 "stop_reason": stop_reason,
-                "usage": {
-                    "input_tokens": openai_resp.get("usage", {}).get("prompt_tokens", 0),
-                    "output_tokens": openai_resp.get("usage", {}).get("completion_tokens", 0),
-                },
+                "usage": {"input_tokens": 0, "output_tokens": max(1, len(full_text) // 4)},
             })
 
     except Exception as e:
