@@ -15,12 +15,12 @@ MODEL_MAP = {
     "claude-opus-4-6": "nvidia/nemotron-3-super-120b-a12b",
     "opus": "nvidia/nemotron-3-super-120b-a12b",
     "claude-sonnet-4-6": "nvidia/nemotron-3-super-120b-a12b",
-    "sonnet": "deepseek-ai/deepseek-v4-pro",
-    "claude-haiku-4-5": "deepseek-ai/deepseek-v4-flash",
-    "claude-haiku-4-5-20251001": "deepseek-ai/deepseek-v4-flash",
-    "claude-3-5-haiku": "deepseek-ai/deepseek-v4-flash",
-    "claude-3-5-haiku-20241022": "deepseek-ai/deepseek-v4-flash",
-    "haiku": "deepseek-ai/deepseek-v4-flash",
+    "sonnet": "nvidia/nemotron-3-super-120b-a12b",
+    "claude-haiku-4-5": "nvidia/nemotron-3-super-120b-a12b",
+    "claude-haiku-4-5-20251001": "nvidia/nemotron-3-super-120b-a12b",
+    "claude-3-5-haiku": "nvidia/nemotron-3-super-120b-a12b",
+    "claude-3-5-haiku-20241022": "nvidia/nemotron-3-super-120b-a12b",
+    "haiku": "nvidia/nemotron-3-super-120b-a12b",
 }
 
 
@@ -51,12 +51,15 @@ app = FastAPI(lifespan=lifespan)
 async def health():
     return {"status": "ok", "keymaster": KEYMASTER_URL, "version": "2.1.0"}
 
+TOOL_DISCIPLINE = """\n\nIMPORTANT: Only call tools when genuinely required to complete the task. Do not call tools for simple conversational responses, greetings, or questions you can answer directly. When in doubt, respond in plain text first."""
+
 def convert_messages(body):
     msgs = []
     if "system" in body:
         system = body["system"]
         if isinstance(system, list):
             system = "\n".join(b.get("text", "") for b in system if isinstance(b, dict))
+        system += TOOL_DISCIPLINE
         msgs.append({"role": "system", "content": system})
 
     for msg in body.get("messages", []):
