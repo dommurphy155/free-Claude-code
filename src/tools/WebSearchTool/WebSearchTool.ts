@@ -255,9 +255,9 @@ export const WebSearchTool = buildTool({
     return { result: true }
   },
   async call(input, context, _canUseTool, _parentMessage, onProgress) {
-    // Handle null or undefined input
-    if (!input) {
-      return { query: '', results: ['Error: No input provided to web search tool'], durationSeconds: 0 }
+    // Handle null, undefined, or non-object input
+    if (!input || typeof input !== 'object') {
+      return { query: '', results: ['Error: Invalid input provided to web search tool'], durationSeconds: 0 }
     }
 
     console.error('[WEBSEARCH] === CALL STARTED ===')
