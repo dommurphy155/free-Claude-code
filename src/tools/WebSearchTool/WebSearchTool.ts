@@ -233,11 +233,18 @@ export const WebSearchTool = buildTool({
     return ''
   },
   async validateInput(input) {
-    if (!input || typeof input.query !== 'string') {
+    // Handle null, undefined, or non-object input
+    if (!input || typeof input !== 'object') {
       return { result: false, message: 'Error: Missing or invalid input', errorCode: 1 }
     }
-    const { query, allowed_domains, blocked_domains } = input
-    if (!query.length) {
+    if (!input.query || typeof input.query !== 'string') {
+      return { result: false, message: 'Error: Missing or invalid query', errorCode: 1 }
+    }
+    // Safely destructure query for validation
+    const queryValue = input.query
+    const allowed_domains = input.allowed_domains
+    const blocked_domains = input.blocked_domains
+    if (!queryValue.length) {
       return {
         result: false,
         message: 'Error: Missing query',
