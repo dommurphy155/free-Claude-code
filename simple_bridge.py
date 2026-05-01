@@ -12,15 +12,15 @@ import httpx
 KEYMASTER_URL = os.getenv("KEYMASTER_URL", "http://127.0.0.1:8787")
 
 MODEL_MAP = {
-    "claude-opus-4-6": "nvidia/nemotron-3-super-120b-a12b",
-    "opus": "nvidia/nemotron-3-super-120b-a12b",
-    "claude-sonnet-4-6": "nvidia/nemotron-3-super-120b-a12b",
-    "sonnet": "nvidia/nemotron-3-super-120b-a12b",
-    "claude-haiku-4-5": "nvidia/nemotron-3-super-120b-a12b",
-    "claude-haiku-4-5-20251001": "nvidia/nemotron-3-super-120b-a12b",
-    "claude-3-5-haiku": "nvidia/nemotron-3-super-120b-a12b",
-    "claude-3-5-haiku-20241022": "nvidia/nemotron-3-super-120b-a12b",
-    "haiku": "nvidia/nemotron-3-super-120b-a12b",
+    "claude-opus-4-6": "moonshotai/Kimi-K2.6",
+    "opus": "moonshotai/Kimi-K2.6",
+    "claude-sonnet-4-6": "moonshotai/Kimi-K2.6",
+    "sonnet": "moonshotai/Kimi-K2.6",
+    "claude-haiku-4-5": "moonshotai/Kimi-K2.6",
+    "claude-haiku-4-5-20251001": "moonshotai/Kimi-K2.6",
+    "claude-3-5-haiku": "moonshotai/Kimi-K2.6",
+    "claude-3-5-haiku-20241022": "moonshotai/Kimi-K2.6",
+    "haiku": "moonshotai/Kimi-K2.6",
 }
 
 
