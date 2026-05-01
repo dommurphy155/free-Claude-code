@@ -148,6 +148,27 @@ def build_openai_body(body, anthropic_model):
 
     return openai_body
 
+
+@app.get("/v1/models")
+async def list_models():
+    return {
+        "object": "list",
+        "data": [
+            {"id": "claude-opus-4-6", "object": "model", "created": 1700000000, "owned_by": "anthropic"},
+            {"id": "claude-sonnet-4-6", "object": "model", "created": 1700000000, "owned_by": "anthropic"},
+            {"id": "claude-haiku-4-5", "object": "model", "created": 1700000000, "owned_by": "anthropic"},
+            {"id": "claude-haiku-4-5-20251001", "object": "model", "created": 1700000000, "owned_by": "anthropic"},
+        ]
+    }
+
+@app.get("/v1/models/{model_id}")
+async def get_model(model_id: str):
+    return {"id": model_id, "object": "model", "created": 1700000000, "owned_by": "anthropic"}
+
+@app.api_route("/{path:path}", methods=["HEAD", "GET"])
+async def catch_all(path: str):
+    return JSONResponse(status_code=200, content={"status": "ok"})
+
 @app.post("/v1/messages")
 async def messages(request: Request):
     request_id = uuid.uuid4().hex[:8]
