@@ -326,6 +326,12 @@ export const ToolSearchTool = buildTool({
     return outputSchema()
   },
   async call(input, { options: { tools }, getAppState }) {
+    // Validate input first
+    const validation = await this.validateInput(input)
+    if (!validation.result) {
+      return { matches: [], query: '', total_deferred_tools: 0 }
+    }
+
     // Extra guard against null/undefined input at the very start
     if (input == null) {
       return { matches: [], query: '', total_deferred_tools: 0 }

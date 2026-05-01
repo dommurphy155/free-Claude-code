@@ -262,6 +262,12 @@ export const WebSearchTool = buildTool({
   },
   async call(input, context, _canUseTool, _parentMessage, onProgress) {
     try {
+      // Validate input first
+      const validation = await this.validateInput(input)
+      if (!validation.result) {
+        return { query: '', results: [validation.message], durationSeconds: 0 }
+      }
+
       // Extra guard against null/undefined input at the very start
       if (input == null) {
         return { query: '', results: ['Error: Invalid input provided to web search tool'], durationSeconds: 0 }
