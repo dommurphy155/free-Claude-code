@@ -204,6 +204,7 @@ async def messages(request: Request):
 
             yield f"event: content_block_stop\ndata: {json.dumps({'type': 'content_block_stop', 'index': 0})}\n\n"
 
+            print(f"[BRIDGE] TOOL CHUNKS: {tool_call_chunks}", file=__import__("sys").stderr, flush=True)
             if tool_call_chunks:
                 for i, (idx, tc) in enumerate(tool_call_chunks.items(), start=1):
                     yield f"event: content_block_start\ndata: {json.dumps({'type': 'content_block_start', 'index': i, 'content_block': {'type': 'tool_use', 'id': tc['id'], 'name': tc['name'], 'input': {}}})}\n\n"
