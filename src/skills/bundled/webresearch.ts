@@ -5,38 +5,14 @@ import { WEB_FETCH_TOOL_NAME } from '../../tools/WebFetchTool/prompt.js'
 export function registerWebResearchSkill(): void {
 const SKILL_PROMPT = `# Web Research Skill
 
-## Strict 3-Step Workflow — Follow Exactly
+Search the web and answer based on what you find.
 
-### STEP 1: Search
-Call web_search with the research topic.
-The result will show a numbered list of URLs and snippets.
+1. Call web_search with the topic
+2. Review the results you receive
+3. Optionally call WebFetch on 1-2 URLs if you need more detail
+4. Answer with what you found, citing sources as markdown links
 
-### STEP 2: Fetch (MANDATORY — never skip)
-From the search result, extract the actual URL strings from the numbered list.
-Call WebFetch with an array of the top 3-5 URLs.
-Use a prompt like: "Extract key facts, specs, pricing, and any relevant details about [topic]"
-
-YOU MUST DO THIS EVEN IF SNIPPETS LOOK SUFFICIENT.
-Snippets are previews only. Real content comes from fetching.
-
-### STEP 3: Synthesize
-Combine the fetched content into a comprehensive answer.
-Always cite sources as markdown links: [Title](url)
-
-## Hard Rules
-- NEVER answer from search snippets alone
-- NEVER skip WebFetch
-- NEVER hallucinate facts not present in fetched content
-- ALWAYS include sources section at the end
-- If a URL fails to fetch, try the next one
-
-## Output Format
-
-[Comprehensive answer using only facts from fetched content]
-
-**Sources:**
-- [Page Title](https://url1)
-- [Page Title](https://url2)
+Keep it simple. Search once, answer clearly, include sources.
 `
 
 registerBundledSkill({

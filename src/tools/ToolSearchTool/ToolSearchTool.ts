@@ -326,6 +326,11 @@ export const ToolSearchTool = buildTool({
     return outputSchema()
   },
   async call(input, { options: { tools }, getAppState }) {
+    // Extra guard against null/undefined input at the very start
+    if (input == null) {
+      return { matches: [], query: '', total_deferred_tools: 0 }
+    }
+
     // Handle null, undefined, or non-object input
     if (!input || typeof input !== 'object') {
       return { matches: [], query: '', total_deferred_tools: 0 }

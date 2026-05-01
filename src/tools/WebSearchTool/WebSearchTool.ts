@@ -261,114 +261,124 @@ export const WebSearchTool = buildTool({
     return { result: true }
   },
   async call(input, context, _canUseTool, _parentMessage, onProgress) {
-    // Handle null, undefined, or non-object input
-    if (!input || typeof input !== 'object') {
-      return { query: '', results: ['Error: Invalid input provided to web search tool'], durationSeconds: 0 }
-    }
-
-    console.error('[WEBSEARCH] === CALL STARTED ===')
-    console.error('[WEBSEARCH] Input:', JSON.stringify(input))
-    console.error('[WEBSEARCH] Context keys:', Object.keys(context || {}).join(', '))
-
-    const startTime = performance.now()
-    if (!input || typeof input.query !== 'string') {
-      return { query: '', results: ['Error: no query provided'], durationSeconds: 0 }
-    }
-    const query = input?.query ?? ''
-    const depth = input?.depth ?? 'standard'
-
-    console.error('[WEBSEARCH] Query:', query, 'Depth:', depth)
-
-    // Phase 1: Search using SearXNG HTTP API
-    console.error('[WEBSEARCH] Calling onProgress...')
-    onProgress?.({
-      toolUseID: `web-search-progress-start`,
-      data: {
-        type: 'web_search',
-        query,
-        status: 'searching',
-        message: `Searching for "${query}"...`,
+    try {
+      // Extra guard against null/undefined input at the very start
+      if (input == null) {
+        return { query: '', results: ['Error: Invalid input provided to web search tool'], durationSeconds: 0 }
       }
-    })
 
-    console.error('[WEBSEARCH] Starting SearXNG search...')
+      // Handle null, undefined, or non-object input
+      if (!input || typeof input !== 'object') {
+        return { query: '', results: ['Error: Invalid input provided to web search tool'], durationSeconds: 0 }
+      }
 
-    // Build query list — expand for deep mode
-    const queries: string[] = [query]
-    if (depth === 'deep') {
-      // Add variant queries for broader coverage
-      queries.push(`${query} review specs`)
-      queries.push(`${query} price buy`)
-    }
+      console.error('[WEBSEARCH] === CALL STARTED ===')
+      console.error('[WEBSEARCH] Input:', JSON.stringify(input))
+      console.error('[WEBSEARCH] Context keys:', Object.keys(context || {}).join(', '))
 
-    // Call SearXNG for each query and merge results (dedup by URL)
-    const seenUrls = new Set<string>()
-    const allResults: any[] = []
+      const startTime = performance.now()
+      if (!input || typeof input.query !== 'string') {
+        return { query: '', results: ['Error: no query provided'], durationSeconds: 0 }
+      }
+      const query = input?.query ?? ''
+      const depth = input?.depth ?? 'standard'
 
-    for (const q of queries) {
-      const searxngUrl = `http://localhost:8888/search?q=${encodeURIComponent(q)}&format=json`
-      console.error('[WEBSEARCH] SearXNG URL:', searxngUrl)
-      try {
-        const resp = await fetch(searxngUrl, {
-          signal: context.abortController.signal,
-          headers: { 'Accept': 'application/json' }
-        })
-        console.error('[WEBSEARCH] Response status:', resp.status)
-        if (resp.ok) {
-          const data = await resp.json()
-          console.error('[WEBSEARCH] Got data, results count:', data.results?.length || 0)
-          for (const r of (data.results || [])) {
-            const url = r.url || r.link || ''
-            if (url && !seenUrls.has(url)) {
-              seenUrls.add(url)
-              allResults.push({
-                title: r.title || '',
-                url,
-                snippet: r.content || r.snippet || '',
-                score: r.score || 0,
-              })
-            }
-          }
-        } else {
-          console.error('[WEBSEARCH] SearXNG returned error:', resp.status)
+      console.error('[WEBSEARCH] Query:', query, 'Depth:', depth)
+
+      // Phase 1: Search using SearXNG HTTP API
+      console.error('[WEBSEARCH] Calling onProgress...')
+      onProgress?.({
+        toolUseID: `web-search-progress-start`,
+        data: {
+          type: 'web_search',
+          query,
+          status: 'searching',
+          message: `Searching for "${query}"...`,
         }
-      } catch (e) {
-        console.error('[WEBSEARCH] SearXNG search failed for query', q, e)
+      })
+
+      console.error('[WEBSEARCH] Starting SearXNG search...')
+
+      // Build query list — expand for deep mode
+      const queries: string[] = [query]
+      if (depth === 'deep') {
+        // Add variant queries for broader coverage
+        queries.push(`${query} review specs`)
+        queries.push(`${query} price buy`)
       }
-    }
 
-    // Sort by score descending
-    allResults.sort((a, b) => (b.score || 0) - (a.score || 0))
+      // Call SearXNG for each query and merge results (dedup by URL)
+      const seenUrls = new Set<string>()
+      const allResults: any[] = []
 
-    const searchData = { results: allResults, num_results: allResults.length }
-    const results = searchData.results || []
-    const resultCount = searchData.num_results || results.length
+      for (const q of queries) {
+        const searxngUrl = `http://localhost:8888/search?q=${encodeURIComponent(q)}&format=json`
+        console.error('[WEBSEARCH] SearXNG URL:', searxngUrl)
+        try {
+          const resp = await fetch(searxngUrl, {
+            signal: context.abortController.signal,
+            headers: { 'Accept': 'application/json' }
+          })
+          console.error('[WEBSEARCH] Response status:', resp.status)
+          if (resp.ok) {
+            const data = await resp.json()
+            console.error('[WEBSEARCH] Got data, results count:', data.results?.length || 0)
+            for (const r of (data.results || [])) {
+              const url = r.url || r.link || ''
+              if (url && !seenUrls.has(url)) {
+                seenUrls.add(url)
+                allResults.push({
+                  title: r.title || '',
+                  url,
+                  snippet: r.content || r.snippet || '',
+                  score: r.score || 0,
+                })
+              }
+            }
+          } else {
+            console.error('[WEBSEARCH] SearXNG returned error:', resp.status)
+          }
+        } catch (e) {
+          console.error('[WEBSEARCH] SearXNG search failed for query', q, e)
+        }
+      }
 
-    console.error('[WEBSEARCH] Found', resultCount, 'results')
+      // Sort by score descending
+      allResults.sort((a, b) => (b.score || 0) - (a.score || 0))
 
-    // SKIP FETCH PHASE - just return search results to avoid hang
-    console.error('[WEBSEARCH] Calling onProgress complete...')
-    onProgress?.({
-      toolUseID: `web-search-progress-complete`,
-      data: {
-        type: 'web_search',
+      const searchData = { results: allResults, num_results: allResults.length }
+      const results = searchData.results || []
+      const resultCount = searchData.num_results || results.length
+
+      console.error('[WEBSEARCH] Found', resultCount, 'results')
+
+      // SKIP FETCH PHASE - just return search results to avoid hang
+      console.error('[WEBSEARCH] Calling onProgress complete...')
+      onProgress?.({
+        toolUseID: `web-search-progress-complete`,
+        data: {
+          type: 'web_search',
+          query,
+          status: 'complete',
+          message: `Found ${resultCount} results.`,
+        }
+      })
+
+      const endTime = performance.now()
+
+      // Return just search results - let skill call web_fetch separately
+      console.error('[WEBSEARCH] Building result...')
+      const searchText = JSON.stringify(searchData, null, 2)
+
+      console.error('[WEBSEARCH] === CALL COMPLETE ===')
+      return {
         query,
-        status: 'complete',
-        message: `Found ${resultCount} results.`,
+        results: [searchText],
+        durationSeconds: (endTime - startTime) / 1000,
       }
-    })
-
-    const endTime = performance.now()
-
-    // Return just search results - let skill call web_fetch separately
-    console.error('[WEBSEARCH] Building result...')
-    const searchText = JSON.stringify(searchData, null, 2)
-
-    console.error('[WEBSEARCH] === CALL COMPLETE ===')
-    return {
-      query,
-      results: [searchText],
-      durationSeconds: (endTime - startTime) / 1000,
+    } catch (err) {
+      console.error('[WEBSEARCH] Unexpected error:', err)
+      return { query: '', results: [`Error: Internal web search tool error: ${err.message || String(err)}`], durationSeconds: 0 }
     }
   },
   mapToolResultToToolResultBlockParam(output, toolUseID) {
