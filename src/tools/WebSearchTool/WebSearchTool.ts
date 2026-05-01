@@ -420,6 +420,7 @@ export const WebSearchTool = buildTool({
       formattedOutput += `No results found. Try a different query.`
     }
 
+    console.error("[WEBSEARCH] RESULT CONTENT:", formattedOutput.trim().slice(0, 500))
     return {
       tool_use_id: toolUseID,
       type: 'tool_result',
