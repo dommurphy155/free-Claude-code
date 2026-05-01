@@ -268,25 +268,12 @@ export const WebSearchTool = buildTool({
         return { query: '', results: [validation.message], durationSeconds: 0 }
       }
 
-      // Extra guard against null/undefined input at the very start
-      if (input == null) {
-        return { query: '', results: ['Error: Invalid input provided to web search tool'], durationSeconds: 0 }
-      }
-
-      // Handle null, undefined, or non-object input
-      if (!input || typeof input !== 'object') {
-        return { query: '', results: ['Error: Invalid input provided to web search tool'], durationSeconds: 0 }
-      }
-
       console.error('[WEBSEARCH] === CALL STARTED ===')
       console.error('[WEBSEARCH] Input:', JSON.stringify(input))
       console.error('[WEBSEARCH] Context keys:', Object.keys(context || {}).join(', '))
 
       const startTime = performance.now()
-      if (!input || typeof input.query !== 'string') {
-        return { query: '', results: ['Error: no query provided'], durationSeconds: 0 }
-      }
-      const query = input?.query ?? ''
+      const query = input.query
       const depth = input?.depth ?? 'standard'
 
       console.error('[WEBSEARCH] Query:', query, 'Depth:', depth)
