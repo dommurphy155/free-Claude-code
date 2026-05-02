@@ -12,15 +12,15 @@ import httpx
 KEYMASTER_URL = os.getenv("KEYMASTER_URL", "http://127.0.0.1:8787")
 
 MODEL_MAP = {
-    "claude-opus-4-6": "moonshotai/Kimi-K2.6",
-    "opus": "moonshotai/Kimi-K2.6",
-    "claude-sonnet-4-6": "moonshotai/Kimi-K2.6",
-    "sonnet": "moonshotai/Kimi-K2.6",
-    "claude-haiku-4-5": "moonshotai/Kimi-K2.6",
-    "claude-haiku-4-5-20251001": "moonshotai/Kimi-K2.6",
-    "claude-3-5-haiku": "moonshotai/Kimi-K2.6",
-    "claude-3-5-haiku-20241022": "moonshotai/Kimi-K2.6",
-    "haiku": "moonshotai/Kimi-K2.6",
+    "claude-opus-4-6": "mistralai/mistral-medium-3.5-128b",
+    "opus": "mistralai/mistral-medium-3.5-128b",
+    "claude-sonnet-4-6": "mistralai/mistral-medium-3.5-128b",
+    "sonnet": "mistralai/mistral-medium-3.5-128b",
+    "claude-haiku-4-5": "mistralai/mistral-medium-3.5-128b",
+    "claude-haiku-4-5-20251001": "mistralai/mistral-medium-3.5-128b",
+    "claude-3-5-haiku": "mistralai/mistral-medium-3.5-128b",
+    "claude-3-5-haiku-20241022": "mistralai/mistral-medium-3.5-128b",
+    "haiku": "mistralai/mistral-medium-3.5-128b",
 }
 
 
@@ -59,7 +59,7 @@ def convert_messages(body):
         system = body["system"]
         if isinstance(system, list):
             system = "\n".join(b.get("text", "") for b in system if isinstance(b, dict))
-        system += TOOL_DISCIPLINE
+        # # system += TOOL_DISCIPLINE  # disabled  # disabled
         msgs.append({"role": "system", "content": system})
 
     for msg in body.get("messages", []):
@@ -119,7 +119,7 @@ def build_openai_body(body, anthropic_model):
         "model": model,
         "messages": convert_messages(body),
         "max_tokens": body.get("max_tokens", 4096),
-        "temperature": body.get("temperature", 0.7),
+        "temperature": body.get("temperature", 0.6),
         "stream": body.get("stream", False),
     }
 
