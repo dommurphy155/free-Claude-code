@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import re
 import os
 import sys
 import uuid
@@ -78,7 +79,7 @@ def convert_messages(body):
                     "content": "\n".join(text_parts) if text_parts else None,
                     "tool_calls": [
                         {
-                            "id": tu.get("id") or "call_0",
+                            "id": re.sub(r'[^a-zA-Z0-9]', 'x', (tu.get("id") or "call000000000"))[:9].ljust(9, '0'),
                             "type": "function",
                             "function": {
                                 "name": tu.get("name", ""),
@@ -97,7 +98,7 @@ def convert_messages(body):
                         tr_content = "\n".join(b.get("text", "") for b in tr_content if isinstance(b, dict))
                     msgs.append({
                         "role": "tool",
-                        "tool_call_id": tr.get("tool_use_id") or "call_0",
+                        "tool_call_id": re.sub(r'[^a-zA-Z0-9]', 'x', (tr.get("tool_use_id") or "call000000000"))[:9].ljust(9, '0'),
                         "content": tr_content
                     })
                 if text_parts:
