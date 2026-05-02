@@ -12,15 +12,15 @@ import httpx
 KEYMASTER_URL = os.getenv("KEYMASTER_URL", "http://127.0.0.1:8787")
 
 MODEL_MAP = {
-    "claude-opus-4-6": "moonshotai/Kimi-K2.6",
-    "opus": "moonshotai/Kimi-K2.6",
-    "claude-sonnet-4-6": "moonshotai/Kimi-K2.6",
-    "sonnet": "moonshotai/Kimi-K2.6",
-    "claude-haiku-4-5": "moonshotai/Kimi-K2.6",
-    "claude-haiku-4-5-20251001": "moonshotai/Kimi-K2.6",
-    "claude-3-5-haiku": "moonshotai/Kimi-K2.6",
-    "claude-3-5-haiku-20241022": "moonshotai/Kimi-K2.6",
-    "haiku": "moonshotai/Kimi-K2.6",
+    "claude-opus-4-6": "moonshotai/Kimi-k2.6",
+    "opus": "moonshotai/Kimi-k2.6",
+    "claude-sonnet-4-6": "moonshotai/Kimi-k2.6",
+    "sonnet": "moonshotai/Kimi-k2.6",
+    "claude-haiku-4-5": "moonshotai/Kimi-k2.6",
+    "claude-haiku-4-5-20251001": "moonshotai/Kimi-k2.6",
+    "claude-3-5-haiku": "moonshotai/Kimi-k2.6",
+    "claude-3-5-haiku-20241022": "moonshotai/Kimi-k2.6",
+    "haiku": "moonshotai/Kimi-k2.6",
 }
 
 
@@ -78,7 +78,7 @@ def convert_messages(body):
                     "content": "\n".join(text_parts) if text_parts else None,
                     "tool_calls": [
                         {
-                            "id": tu.get("id", "call_0"),
+                            "id": tu.get("id") or "call_0",
                             "type": "function",
                             "function": {
                                 "name": tu.get("name", ""),
@@ -97,7 +97,7 @@ def convert_messages(body):
                         tr_content = "\n".join(b.get("text", "") for b in tr_content if isinstance(b, dict))
                     msgs.append({
                         "role": "tool",
-                        "tool_call_id": tr.get("tool_use_id", "call_0"),
+                        "tool_call_id": tr.get("tool_use_id") or "call_0",
                         "content": tr_content
                     })
                 if text_parts:
@@ -207,16 +207,14 @@ async def messages(request: Request):
                                 chunk = json.loads(data)
                                 delta = chunk["choices"][0].get("delta", {}) or {}
                                 text = delta.get("content") or ""
-                                reasoning = delta.get("reasoning_content") or ""
-                                if reasoning and not text:
-                                    text = reasoning
+                                # reasoning_content intentionally dropped
                                 if text:
                                     full_content += text
                                     yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'text_delta', 'text': text}})}\n\n"
                                 for tc in delta.get("tool_calls", []) or []:
                                     idx = tc.get("index", 0)
                                     if idx not in tool_call_chunks:
-                                        tool_call_chunks[idx] = {"id": tc.get("id", f"call_{idx}"), "name": "", "arguments": ""}
+                                        tool_call_chunks[idx] = {"id": tc.get("id") or f"call_{idx}", "name": "", "arguments": ""}
                                     if tc.get("function", {}).get("name"):
                                         tool_call_chunks[idx]["name"] += tc["function"]["name"]
                                     if tc.get("function", {}).get("arguments"):
