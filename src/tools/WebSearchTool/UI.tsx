@@ -22,19 +22,22 @@ function getSearchSummary(results: (SearchResult | string | null | undefined)[])
     totalResultCount
   };
 }
-export function renderToolUseMessage({
-  query,
-  allowed_domains,
-  blocked_domains
-}: Partial<{
-  query: string;
-  allowed_domains?: string[];
-  blocked_domains?: string[];
-}>, {
-  verbose
-}: {
-  verbose: boolean;
-}): React.ReactNode {
+export function renderToolUseMessage(
+  input: Partial<{
+    query: string;
+    allowed_domains?: string[];
+    blocked_domains?: string[];
+  }> | null | undefined,
+  {
+    verbose
+  }: {
+    verbose: boolean;
+  }
+): React.ReactNode {
+  if (!input) {
+    return null;
+  }
+  const { query, allowed_domains, blocked_domains } = input
   if (!query) {
     return null;
   }

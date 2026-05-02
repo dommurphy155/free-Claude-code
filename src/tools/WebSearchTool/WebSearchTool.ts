@@ -164,7 +164,10 @@ export const WebSearchTool = buildTool({
   maxResultSizeChars: 100_000,
   shouldDefer: true,
   async description(input) {
-    return `Claude wants to search the web for: ${input.query}`
+    if (!input || typeof input !== 'object') {
+      return 'Claude wants to search the web'
+    }
+    return `Claude wants to search the web for: ${(input as Record<string, unknown>).query ?? ''}`
   },
   userFacingName() {
     return 'Web Search'
@@ -262,6 +265,12 @@ export const WebSearchTool = buildTool({
   },
   async call(input, context, _canUseTool, _parentMessage, onProgress) {
     try {
+      // Guard against null/undefined input at the very start
+      if (!input || typeof input !== 'object') {
+        console.error('[WEBSEARCH] Null/undefined input received:', input)
+        return { query: '', results: ['Error: Missing or invalid input'], durationSeconds: 0 }
+      }
+
       // Validate input first
       const validation = await this.validateInput(input)
       if (!validation.result) {

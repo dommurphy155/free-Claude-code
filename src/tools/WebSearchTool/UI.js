@@ -18,7 +18,11 @@ function getSearchSummary(results) {
         totalResultCount
     };
 }
-export function renderToolUseMessage({ query, allowed_domains, blocked_domains }, { verbose }) {
+export function renderToolUseMessage(input, { verbose }) {
+    if (!input) {
+        return null;
+    }
+    const { query, allowed_domains, blocked_domains } = input;
     if (!query) {
         return null;
     }

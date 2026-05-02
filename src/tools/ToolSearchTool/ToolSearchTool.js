@@ -253,6 +253,10 @@ export const ToolSearchTool = buildTool({
         return outputSchema();
     },
     async call(input, { options: { tools }, getAppState }) {
+        // Guard against null/undefined input
+        if (!input || typeof input !== 'object') {
+            return { matches: [], query: '', total_deferred_tools: 0 };
+        }
         const { query, max_results = 5 } = input;
         const deferredTools = tools.filter(isDeferredTool);
         maybeInvalidateCache(deferredTools);
