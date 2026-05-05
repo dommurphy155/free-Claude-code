@@ -13,15 +13,15 @@ import httpx
 KEYMASTER_URL = os.getenv("KEYMASTER_URL", "http://127.0.0.1:8787")
 
 MODEL_MAP = {
-    "claude-opus-4-6": "mistralai/mistral-medium-3.5-128b",
-    "opus": "mistralai/mistral-medium-3.5-128b",
-    "claude-sonnet-4-6": "mistralai/mistral-medium-3.5-128b",
-    "sonnet": "mistralai/mistral-medium-3.5-128b",
-    "claude-haiku-4-5": "mistralai/mistral-medium-3.5-128b",
-    "claude-haiku-4-5-20251001": "mistralai/mistral-medium-3.5-128b",
-    "claude-3-5-haiku": "mistralai/mistral-medium-3.5-128b",
-    "claude-3-5-haiku-20241022": "mistralai/mistral-medium-3.5-128b",
-    "haiku": "mistralai/mistral-medium-3.5-128b",
+    "claude-opus-4-6": "moonshotai/Kimi-K2.6",
+    "opus": "moonshotai/Kimi-K2.6",
+    "claude-sonnet-4-6": "moonshotai/Kimi-K2.6",
+    "sonnet": "moonshotai/Kimi-K2.6",
+    "claude-haiku-4-5": "moonshotai/Kimi-K2.6",
+    "claude-haiku-4-5-20251001": "moonshotai/Kimi-K2.6",
+    "claude-3-5-haiku": "moonshotai/Kimi-K2.6",
+    "claude-3-5-haiku-20241022": "moonshotai/Kimi-K2.6",
+    "haiku": "moonshotai/Kimi-K2.6",
 }
 
 
@@ -37,11 +37,6 @@ async def lifespan(app: FastAPI):
         http2=True,
     )
     print("[BRIDGE] HTTP client started", file=sys.stderr, flush=True)
-    try:
-        await http_client.get(f"{KEYMASTER_URL}/health", timeout=5.0)
-        print("[BRIDGE] Keymaster reachable", file=sys.stderr, flush=True)
-    except Exception as e:
-        print(f"[BRIDGE] Keymaster not reachable: {e}", file=sys.stderr, flush=True)
     yield
     await http_client.aclose()
     print("[BRIDGE] HTTP client closed", file=sys.stderr, flush=True)
@@ -224,6 +219,21 @@ async def messages(request: Request):
                                 pass
             except Exception as e:
                 print(f"[BRIDGE:{request_id}] Stream error: {e}", file=sys.stderr)
+
+            # Parse K2.6 inline tool call markup if no structured tool_calls found
+            if not tool_call_chunks and "<|tool_calls_section_begin|>" in full_content:
+                import re
+                pattern = r"<\|tool_call_begin\|>\s*functions\.(\w+)\s*<\|tool_sep\|>(.*?)<\|tool_call_end\|>"
+                matches = list(re.finditer(pattern, full_content, re.DOTALL))
+                if matches:
+                    print(f"[BRIDGE] Parsing {len(matches)} inline tool calls from markup", file=sys.stderr)
+                    for i, m in enumerate(matches):
+                        tool_call_chunks[i] = {
+                            "id": f"call_{uuid.uuid4().hex[:8]}",
+                            "name": m.group(1),
+                            "arguments": m.group(2).strip()
+                        }
+                    full_content = ""  # don't emit the markup as text
 
             yield f"event: content_block_stop\ndata: {json.dumps({'type': 'content_block_stop', 'index': 0})}\n\n"
 
