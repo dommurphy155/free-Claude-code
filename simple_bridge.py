@@ -13,15 +13,15 @@ import httpx
 KEYMASTER_URL = os.getenv("KEYMASTER_URL", "http://127.0.0.1:8787")
 
 MODEL_MAP = {
-    "claude-opus-4-6": "moonshotai/Kimi-K2.6",
-    "opus": "moonshotai/Kimi-K2.6",
-    "claude-sonnet-4-6": "moonshotai/Kimi-K2.6",
-    "sonnet": "moonshotai/Kimi-K2.6",
-    "claude-haiku-4-5": "moonshotai/Kimi-K2.6",
-    "claude-haiku-4-5-20251001": "moonshotai/Kimi-K2.6",
-    "claude-3-5-haiku": "moonshotai/Kimi-K2.6",
-    "claude-3-5-haiku-20241022": "moonshotai/Kimi-K2.6",
-    "haiku": "moonshotai/Kimi-K2.6",
+    "claude-opus-4-6": "moonshotai/kimi-k2.6",
+    "opus": "moonshotai/kimi-k2.6",
+    "claude-sonnet-4-6": "moonshotai/kimi-k2.6",
+    "sonnet": "moonshotai/kimi-k2.6",
+    "claude-haiku-4-5": "moonshotai/kimi-k2.6",
+    "claude-haiku-4-5-20251001": "moonshotai/kimi-k2.6",
+    "claude-3-5-haiku": "moonshotai/kimi-k2.6",
+    "claude-3-5-haiku-20241022": "moonshotai/kimi-k2.6",
+    "haiku": "moonshotai/kimi-k2.6",
 }
 
 
