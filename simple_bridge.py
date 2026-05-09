@@ -25,7 +25,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 # ─────────────────────────────────────────────────────────────────────────────
 
 KEYMASTER_URL = os.getenv("KEYMASTER_URL", "http://127.0.0.1:8787")
-DEFAULT_MODEL = "qwen/qwen3.5-397b-a17b"
+DEFAULT_MODEL = "moonshotai/Kimi-K2.6"
 
 logging.basicConfig(
     level=logging.INFO,
