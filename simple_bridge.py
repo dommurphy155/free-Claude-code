@@ -104,7 +104,7 @@ def convert_tool_use(msg: Dict[str, Any], text_parts: List[str]) -> Dict[str, An
     tool_uses = [b for b in msg["content"] if b.get("type") == "tool_use"]
     return {
         "role":    "assistant",
-        "content": "\n".join(text_parts) if text_parts else None,
+        "content": "\n".join(text_parts) if text_parts else "",
         "tool_calls": [
             {
                 "id":   tu.get("id", f"call_{i}"),
@@ -265,6 +265,7 @@ async def stream_upstream(
     yield f"event: content_block_start\ndata: {json.dumps({'type': 'content_block_start', 'index': 0, 'content_block': {'type': 'text', 'text': ''}})}\n\n"
 
     try:
+        print(f"[DEBUG:{request_id}] last 3 msgs: {json.dumps(openai_body['messages'][-3:], indent=2)}", file=sys.stderr, flush=True)
         async with http_client.stream(
             "POST", api_url,
             json=openai_body,
