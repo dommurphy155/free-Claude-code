@@ -265,7 +265,7 @@ async def stream_upstream(
     yield f"event: content_block_start\ndata: {json.dumps({'type': 'content_block_start', 'index': 0, 'content_block': {'type': 'text', 'text': ''}})}\n\n"
 
     try:
-        print(f"[DEBUG:{request_id}] last 3 msgs: {json.dumps(openai_body['messages'][-3:], indent=2)}", file=sys.stderr, flush=True)
+        if os.getenv("DEBUG"): print(f"[DEBUG:{request_id}] last 3 msgs: {str(openai_body['messages'][-3:])[:300]}", file=sys.stderr, flush=True)
         async with http_client.stream(
             "POST", api_url,
             json=openai_body,
@@ -465,9 +465,10 @@ async def messages(request: Request):
             "content":     [{"type": "text", "text": f"Bridge Error: {str(e)}"}],
             "model":       anthropic_model,
             "stop_reason": "error",
+            "request_id":  request_id,
         })
     finally:
-        _active_requests -= 1
+        _active_requests = max(0, _active_requests - 1)
 
 
 # =============================================================================
