@@ -28,7 +28,7 @@ import httpx
 # =============================================================================
 
 KEYMASTER_URL    = os.getenv("KEYMASTER_URL", "http://127.0.0.1:8787")
-DEFAULT_MODEL    = "moonshotai/Kimi-K2.5"
+DEFAULT_MODEL    = "moonshotai/Kimi-K2.6"
 MAX_BODY_BYTES   = int(os.getenv("MAX_BODY_BYTES", 10 * 1024 * 1024))  # 10MB default
 RETRY_ATTEMPTS   = int(os.getenv("RETRY_ATTEMPTS", "3"))
 RETRY_CODES      = {502, 503, 504}
