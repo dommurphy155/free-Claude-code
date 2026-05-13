@@ -6,7 +6,7 @@ import { existsSync } from 'fs'
 import { readFile } from 'fs/promises'
 
 const LLM_URL = 'https://integrate.api.nvidia.com/v1/chat/completions'
-const LLM_MODEL = 'google/gemma-4-31b-it'
+const LLM_MODEL = 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning'
 
 const NVIDIA_API_KEYS = [
   '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',
