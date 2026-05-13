@@ -8,8 +8,17 @@ import { readFile } from 'fs/promises'
 const LLM_URL = 'https://integrate.api.nvidia.com/v1/chat/completions'
 const LLM_MODEL = 'google/gemma-4-31b-it'
 
+const NVIDIA_API_KEYS = [
+  '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',
+  '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',
+  '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',
+  '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',
+]
+
+let currentKeyIndex = 0
+
 function getNvidiaApiKey(): string {
-  return process.env.NVIDIA_API_KEY || ''
+  return process.env.NVIDIA_API_KEY || NVIDIA_API_KEYS[currentKeyIndex++ % NVIDIA_API_KEYS.length]
 }
 
 const inputSchema = lazySchema(() =>
@@ -186,14 +195,6 @@ Uses Moonshot AI's Kimi-K2.5 vision model through NVIDIA's API for high-quality 
         result: false,
         message: `Unsupported image format. Supported: ${validExtensions.join(', ')}`,
         errorCode: 3,
-      }
-    }
-
-    if (!getNvidiaApiKey()) {
-      return {
-        result: false,
-        message: 'NVIDIA_API_KEY environment variable not set',
-        errorCode: 4,
       }
     }
 

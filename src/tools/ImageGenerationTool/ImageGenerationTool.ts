@@ -6,8 +6,17 @@ import { readFile } from 'fs/promises'
 
 const IMAGE_URL = 'https://ai.api.nvidia.com/v1/genai/stabilityai/stable-diffusion-3-medium'
 
+const NVIDIA_IMAGE_API_KEYS = [
+  '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',
+  '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',
+  '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',
+  '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',
+]
+
+let currentImageKeyIndex = 0
+
 function getNvidiaImageKey(): string {
-  return process.env.NVIDIA_IMAGE_API_KEY || ''
+  return process.env.NVIDIA_IMAGE_API_KEY || NVIDIA_IMAGE_API_KEYS[currentImageKeyIndex++ % NVIDIA_IMAGE_API_KEYS.length]
 }
 
 const inputSchema = lazySchema(() =>
@@ -174,13 +183,6 @@ Returns base64-encoded image data and optionally saves to the specified path.`
         result: false,
         message: 'Prompt is required',
         errorCode: 1,
-      }
-    }
-    if (!getNvidiaImageKey()) {
-      return {
-        result: false,
-        message: 'NVIDIA_IMAGE_API_KEY environment variable not set',
-        errorCode: 2,
       }
     }
     return { result: true }

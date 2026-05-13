@@ -14,8 +14,17 @@ const execAsync = promisify(exec)
 const ASR_URL = 'https://integrate.api.nvidia.com/v1/audio/transcriptions'
 const ASR_MODEL = 'nvidia/canary-1b'
 
+const NVIDIA_API_KEYS = [
+  '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',
+  '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',
+  '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',
+  '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',
+]
+
+let currentKeyIndex = 0
+
 function getNvidiaApiKey(): string {
-  return process.env.NVIDIA_API_KEY || ''
+  return process.env.NVIDIA_API_KEY || NVIDIA_API_KEYS[currentKeyIndex++ % NVIDIA_API_KEYS.length]
 }
 
 const inputSchema = lazySchema(() =>
@@ -199,14 +208,6 @@ Audio files are automatically converted to the format required by the ASR API. T
         result: false,
         message: `Audio file not found: ${input.audio_path}`,
         errorCode: 2,
-      }
-    }
-
-    if (!getNvidiaApiKey()) {
-      return {
-        result: false,
-        message: 'NVIDIA_API_KEY environment variable not set',
-        errorCode: 3,
       }
     }
 
