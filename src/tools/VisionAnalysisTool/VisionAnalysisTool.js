@@ -4,6 +4,7 @@ import { lazySchema } from '../../utils/lazySchema.js';
 import { logError } from '../../utils/log.js';
 import { existsSync } from 'fs';
 import { readFile } from 'fs/promises';
+import { createUserMessage } from '../../utils/messages.js';
 
 const inputSchema = lazySchema(() => z.strictObject({
     image_path: z.string().describe('Path to the image file to analyze (png, jpg, jpeg, webp supported)'),
@@ -16,8 +17,6 @@ const inputSchema = lazySchema(() => z.strictObject({
 const outputSchema = lazySchema(() => z.object({
     description: z.string().describe('Detailed description of the image'),
     prompt: z.string().describe('The prompt/question used'),
-    base64: z.string().describe('Base64 encoded image data'),
-    mediaType: z.string().describe('Image media type'),
 }));
 
 export const VISION_ANALYSIS_TOOL_NAME = 'vision_analysis';
@@ -62,14 +61,11 @@ export const VisionAnalysisTool = buildTool({
 
 Analyze images using native vision capabilities.
 
-When this tool is called, read the image file and return its base64 data along with the user's question. The system will then display the image for native vision analysis.
+When this tool is called, read the image file and return its data via newMessages for native vision analysis.
 
 **Parameters:**
 - image_path: Path to the image file (required)
-- prompt: Optional specific question or focus (default: "Describe this image in detail")
-
-**Output:**
-Returns the image data and prompt for native vision processing.`;
+- prompt: Optional specific question or focus (default: "Describe this image in detail")`;
     },
     async validateInput(input) {
         if (!input.image_path) {
@@ -114,13 +110,31 @@ Returns the image data and prompt for native vision processing.`;
                     ? 'image/webp'
                     : 'image/png';
 
+            const imageBlock = {
+                type: 'image',
+                source: {
+                    type: 'base64',
+                    media_type: `image/${mediaType}`,
+                    data: base64,
+                },
+            };
+
+            const textBlock = {
+                type: 'text',
+                text: prompt,
+            };
+
             return {
                 data: {
-                    description: `Image loaded. Analyze this image and answer: "${prompt}"`,
+                    description: `Image loaded for analysis: ${prompt}`,
                     prompt,
-                    base64,
-                    mediaType: `image/${mediaType}`,
                 },
+                newMessages: [
+                    createUserMessage({
+                        content: [imageBlock, textBlock],
+                        isMeta: true,
+                    }),
+                ],
             };
         } catch (error) {
             logError(error instanceof Error ? error : new Error(String(error)));
@@ -128,23 +142,10 @@ Returns the image data and prompt for native vision processing.`;
         }
     },
     mapToolResultToToolResultBlockParam(result, toolUseID) {
-        // Return the image as base64 content that Claude can see
-        const imageBlock = {
-            type: 'image',
-            source: {
-                type: 'base64',
-                media_type: result.mediaType,
-                data: result.base64,
-            },
-        };
-
         return {
             tool_use_id: toolUseID,
             type: 'tool_result',
-            content: [
-                { type: 'text', text: `**Prompt:** ${result.prompt}\n\n**Image for analysis:**` },
-                imageBlock,
-            ],
+            content: `Image analysis complete!\n\n**Prompt:** ${result.prompt}\n\n${result.description}`,
         };
     },
 });
