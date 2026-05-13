@@ -8,9 +8,6 @@ import {
 import {
   SPEECH_TO_TEXT_TOOL_NAME,
 } from '../../tools/SpeechToTextTool/SpeechToTextTool.js'
-import {
-  VISION_ANALYSIS_TOOL_NAME,
-} from '../../tools/VisionAnalysisTool/VisionAnalysisTool.js'
 
 const MEDIA_PROMPT = `# Media Generation & Analysis Skill
 
@@ -85,45 +82,18 @@ speech_to_text({
 })
 \`\`\`
 
-### 4. Vision Analysis (${VISION_ANALYSIS_TOOL_NAME})
-Analyze images using Kimi-K2.5 vision model.
-
-**Environment Required:** NVIDIA_API_KEY
-
-**Parameters:**
-- image_path: Path to image file (REQUIRED)
-- prompt: Optional specific question (default: "Describe this image in detail")
-
-**Supported Formats:** PNG, JPEG, WebP
-
-**Example:**
-\`\`\`
-vision_analysis({
-  image_path: "/path/to/screenshot.png",
-  prompt: "What UI elements are visible?"
-})
-\`\`\`
-
 ## Common Workflows
-
-### Generate and Analyze an Image
-1. Generate image with image_generation
-2. Analyze it with vision_analysis
 
 ### Voice Message Pipeline
 1. speech_to_text to transcribe received audio
 2. Process the text
 3. text_to_speech to respond with voice
 
-### Screenshot Analysis
-1. vision_analysis to understand what's on screen
-2. Take action based on the description
-
 ## Environment Setup
 
 Required environment variables:
 \`\`\`bash
-export NVIDIA_API_KEY="nvapi-..."        # For ASR and Vision
+export NVIDIA_API_KEY="nvapi-..."        # For ASR
 export NVIDIA_IMAGE_API_KEY="nvapi-..." # For Image Generation
 \`\`\`
 
@@ -137,7 +107,6 @@ pip install edge-tts
 - **Image Generation:** Be specific in prompts. Include style, lighting, and composition details.
 - **TTS:** Use rate adjustment for natural pacing. Negative pitch sounds more serious.
 - **ASR:** Audio is automatically converted to the required format.
-- **Vision:** Ask specific questions for better results than generic "describe this".
 `
 
 export function registerMediaSkill(): void {
@@ -154,7 +123,6 @@ export function registerMediaSkill(): void {
       IMAGE_GENERATION_TOOL_NAME,
       TEXT_TO_SPEECH_TOOL_NAME,
       SPEECH_TO_TEXT_TOOL_NAME,
-      VISION_ANALYSIS_TOOL_NAME,
     ],
     async getPromptForCommand(args) {
       let prompt = MEDIA_PROMPT
@@ -170,7 +138,6 @@ ${args}
 - Image generation → image_generation
 - Text to speech/audio creation → text_to_speech
 - Transcribe audio/speech recognition → speech_to_text
-- Analyze/describe image → vision_analysis
 `
       }
 

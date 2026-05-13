@@ -67,7 +67,6 @@ import { LSPTool } from './tools/LSPTool/LSPTool.js';
 import { ImageGenerationTool } from './tools/ImageGenerationTool/ImageGenerationTool.js';
 import { TextToSpeechTool } from './tools/TextToSpeechTool/TextToSpeechTool.js';
 import { SpeechToTextTool } from './tools/SpeechToTextTool/SpeechToTextTool.js';
-import { VisionAnalysisTool } from './tools/VisionAnalysisTool/VisionAnalysisTool.js';
 import { ListMcpResourcesTool } from './tools/ListMcpResourcesTool/ListMcpResourcesTool.js';
 import { ReadMcpResourceTool } from './tools/ReadMcpResourceTool/ReadMcpResourceTool.js';
 import { ToolSearchTool } from './tools/ToolSearchTool/ToolSearchTool.js';
@@ -224,7 +223,6 @@ export function getAllBaseTools() {
         ImageGenerationTool,
         TextToSpeechTool,
         SpeechToTextTool,
-        VisionAnalysisTool,
         ListMcpResourcesTool,
         ReadMcpResourceTool,
         SelfVerificationTool,
