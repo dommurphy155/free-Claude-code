@@ -74,11 +74,20 @@ export async function executeSimpleTask(task: SimpleTask): Promise<TaskResult> {
   }
 }
 
+const NVIDIA_IMAGE_API_KEYS = [
+  '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',
+  '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',
+  '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',
+  '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',
+]
+let currentImageKeyIndex = 0
+
+function getNvidiaImageApiKey(): string {
+  return process.env.NVIDIA_IMAGE_API_KEY || NVIDIA_IMAGE_API_KEYS[currentImageKeyIndex++ % NVIDIA_IMAGE_API_KEYS.length]
+}
+
 async function generateImage(description: string, outputPath: string): Promise<TaskResult> {
-  const apiKey = process.env.NVIDIA_IMAGE_API_KEY
-  if (!apiKey) {
-    return { success: false, output: '', error: 'NVIDIA_IMAGE_API_KEY not set' }
-  }
+  const apiKey = getNvidiaImageApiKey()
 
   return new Promise((resolve) => {
     const proc = spawn('curl', [
