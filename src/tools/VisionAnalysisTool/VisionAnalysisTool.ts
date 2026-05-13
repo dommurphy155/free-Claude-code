@@ -45,12 +45,7 @@ export type Output = z.infer<OutputSchema>
 export const VISION_ANALYSIS_TOOL_NAME = 'vision_analysis'
 
 async function analyzeImage(imagePath: string, userPrompt: string = 'Describe this image in detail'): Promise<string> {
-  const nvidiaApiKey = getNvidiaApiKey()
-  if (!nvidiaApiKey) {
-    throw new Error('NVIDIA_API_KEY environment variable not set')
-  }
-
-  // Read image file
+  // Read image file and return native vision analysis request
   const imageBuffer = await readFile(imagePath)
   const base64Image = imageBuffer.toString('base64')
 
@@ -58,45 +53,8 @@ async function analyzeImage(imagePath: string, userPrompt: string = 'Describe th
   const ext = imagePath.split('.').pop()?.toLowerCase() || 'png'
   const mimeType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : 'image/png'
 
-  const payload = {
-    model: LLM_MODEL,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'text',
-            text: userPrompt,
-          },
-          {
-            type: 'image_url',
-            image_url: {
-              url: `data:${mimeType};base64,${base64Image}`,
-            },
-          },
-        ],
-      },
-    ],
-    max_tokens: 1024,
-    temperature: 0.7,
-  }
-
-  const response = await fetch(LLM_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${nvidiaApiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`Vision analysis failed: ${response.status} ${errorText}`)
-  }
-
-  const data = await response.json()
-  return data.choices?.[0]?.message?.content || 'No analysis available'
+  // Return a special marker that triggers native vision analysis
+  return `__NATIVE_VISION_ANALYSIS__|${mimeType}|${base64Image}|${userPrompt}`
 }
 
 export const VisionAnalysisTool = buildTool({
