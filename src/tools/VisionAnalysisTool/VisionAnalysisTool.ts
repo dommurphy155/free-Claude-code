@@ -4,22 +4,8 @@ import { lazySchema } from '../../utils/lazySchema.js'
 import { logError } from '../../utils/log.js'
 import { existsSync } from 'fs'
 import { readFile } from 'fs/promises'
-
-const LLM_URL = 'https://integrate.api.nvidia.com/v1/chat/completions'
-const LLM_MODEL = 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning'
-
-const NVIDIA_API_KEYS = [
-  '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',
-  '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',
-  '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',
-  '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',
-]
-
-let currentKeyIndex = 0
-
-function getNvidiaApiKey(): string {
-  return process.env.NVIDIA_API_KEY || NVIDIA_API_KEYS[currentKeyIndex++ % NVIDIA_API_KEYS.length]
-}
+import type { Base64ImageSource } from '@anthropic-ai/sdk/resources/index.mjs'
+import { createUserMessage } from '../../utils/messages.js'
 
 const inputSchema = lazySchema(() =>
   z.strictObject({
@@ -35,7 +21,6 @@ type InputSchema = ReturnType<typeof inputSchema>
 const outputSchema = lazySchema(() =>
   z.object({
     description: z.string().describe('Detailed description of the image'),
-    model: z.string().describe('Model used for analysis'),
     prompt: z.string().describe('The prompt/question used'),
   }),
 )
@@ -44,17 +29,25 @@ type OutputSchema = ReturnType<typeof outputSchema>
 export type Output = z.infer<OutputSchema>
 export const VISION_ANALYSIS_TOOL_NAME = 'vision_analysis'
 
-async function analyzeImage(imagePath: string, userPrompt: string = 'Describe this image in detail'): Promise<string> {
-  // Read image file and return native vision analysis request
+async function loadImageForAnalysis(imagePath: string): Promise<{
+  base64: string
+  mediaType: Base64ImageSource['media_type']
+}> {
+  // Read image file
   const imageBuffer = await readFile(imagePath)
-  const base64Image = imageBuffer.toString('base64')
 
   // Determine mime type from extension
   const ext = imagePath.split('.').pop()?.toLowerCase() || 'png'
-  const mimeType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : 'image/png'
+  const mediaType = ext === 'jpg' || ext === 'jpeg'
+    ? 'image/jpeg'
+    : ext === 'webp'
+      ? 'image/webp'
+      : 'image/png'
 
-  // Return a special marker that triggers native vision analysis
-  return `__NATIVE_VISION_ANALYSIS__|${mimeType}|${base64Image}|${userPrompt}`
+  return {
+    base64: imageBuffer.toString('base64'),
+    mediaType: `image/${mediaType}` as Base64ImageSource['media_type'],
+  }
 }
 
 export const VisionAnalysisTool = buildTool({
@@ -89,16 +82,13 @@ export const VisionAnalysisTool = buildTool({
   async checkPermissions(_input) {
     return {
       behavior: 'allow',
-      decisionReason: { type: 'other', reason: 'Image analysis via NVIDIA vision API' },
+      decisionReason: { type: 'other', reason: 'Image analysis via native vision' },
     }
   },
   async prompt() {
     return `## Vision Analysis Tool
 
-Analyze images using Kimi-K2.5 vision model via NVIDIA NIM API.
-
-**Environment Required:**
-- NVIDIA_API_KEY - API key for vision API
+Analyze images using native vision capabilities.
 
 **Features:**
 - Detailed image description and analysis
@@ -123,10 +113,7 @@ Analyze images using Kimi-K2.5 vision model via NVIDIA NIM API.
 - prompt: Optional specific question or focus (default: "Describe this image in detail")
 
 **Output:**
-Returns a detailed description of the image content.
-
-**Model:**
-Uses Moonshot AI's Kimi-K2.5 vision model through NVIDIA's API for high-quality image understanding.`
+Returns a detailed description of the image content.`
   },
   async validateInput(input) {
     if (!input.image_path) {
@@ -162,15 +149,36 @@ Uses Moonshot AI's Kimi-K2.5 vision model through NVIDIA's API for high-quality 
     const { image_path, prompt = 'Describe this image in detail' } = input
 
     try {
-      const description = await analyzeImage(image_path, prompt)
+      const image = await loadImageForAnalysis(image_path)
 
+      // Create image block for native vision analysis
+      const imageBlock = {
+        type: 'image' as const,
+        source: {
+          type: 'base64' as const,
+          media_type: image.mediaType,
+          data: image.base64,
+        },
+      }
+
+      // Return the image in newMessages so Claude can see it and analyze it
       const output: Output = {
-        description,
-        model: LLM_MODEL,
+        description: `Image loaded for analysis. User asked: "${prompt}"`,
         prompt,
       }
 
-      return { data: output }
+      return {
+        data: output,
+        newMessages: [
+          createUserMessage({
+            content: [
+              imageBlock,
+              { type: 'text', text: prompt },
+            ],
+            isMeta: true,
+          }),
+        ],
+      }
     } catch (error) {
       logError(error instanceof Error ? error : new Error(String(error)))
       throw error
@@ -180,7 +188,6 @@ Uses Moonshot AI's Kimi-K2.5 vision model through NVIDIA's API for high-quality 
     const content = `Image analysis complete!
 
 **Prompt:** ${result.prompt}
-**Model:** ${result.model}
 
 **Description:**
 ${result.description}`

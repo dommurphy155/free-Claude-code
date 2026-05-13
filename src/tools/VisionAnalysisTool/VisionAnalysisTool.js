@@ -4,11 +4,8 @@ import { lazySchema } from '../../utils/lazySchema.js';
 import { logError } from '../../utils/log.js';
 import { existsSync } from 'fs';
 import { readFile } from 'fs/promises';
-const LLM_URL = 'https://integrate.api.nvidia.com/v1/chat/completions';
-const LLM_MODEL = 'google/gemma-4-31b-it';
-function getNvidiaApiKey() {
-    return process.env.NVIDIA_API_KEY || '';
-}
+import { createUserMessage } from '../../utils/messages.js';
+
 const inputSchema = lazySchema(() => z.strictObject({
     image_path: z.string().describe('Path to the image file to analyze (png, jpg, jpeg, webp supported)'),
     prompt: z
@@ -16,60 +13,29 @@ const inputSchema = lazySchema(() => z.strictObject({
         .optional()
         .describe('Optional: specific question or focus for the analysis (default: "Describe this image in detail")'),
 }));
+
 const outputSchema = lazySchema(() => z.object({
     description: z.string().describe('Detailed description of the image'),
-    model: z.string().describe('Model used for analysis'),
     prompt: z.string().describe('The prompt/question used'),
 }));
+
 export const VISION_ANALYSIS_TOOL_NAME = 'vision_analysis';
-async function analyzeImage(imagePath, userPrompt = 'Describe this image in detail') {
-    const nvidiaApiKey = getNvidiaApiKey();
-    if (!nvidiaApiKey) {
-        throw new Error('NVIDIA_API_KEY environment variable not set');
-    }
-    // Read image file
+
+async function loadImageForAnalysis(imagePath) {
     const imageBuffer = await readFile(imagePath);
-    const base64Image = imageBuffer.toString('base64');
-    // Determine mime type from extension
     const ext = imagePath.split('.').pop()?.toLowerCase() || 'png';
-    const mimeType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : 'image/png';
-    const payload = {
-        model: LLM_MODEL,
-        messages: [
-            {
-                role: 'user',
-                content: [
-                    {
-                        type: 'text',
-                        text: userPrompt,
-                    },
-                    {
-                        type: 'image_url',
-                        image_url: {
-                            url: `data:${mimeType};base64,${base64Image}`,
-                        },
-                    },
-                ],
-            },
-        ],
-        max_tokens: 1024,
-        temperature: 0.7,
+    const mediaType = ext === 'jpg' || ext === 'jpeg'
+        ? 'image/jpeg'
+        : ext === 'webp'
+            ? 'image/webp'
+            : 'image/png';
+
+    return {
+        base64: imageBuffer.toString('base64'),
+        mediaType: `image/${mediaType}`,
     };
-    const response = await fetch(LLM_URL, {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${nvidiaApiKey}`,
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-    });
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Vision analysis failed: ${response.status} ${errorText}`);
-    }
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || 'No analysis available';
 }
+
 export const VisionAnalysisTool = buildTool({
     name: VISION_ANALYSIS_TOOL_NAME,
     searchHint: 'analyze images with AI vision',
@@ -102,16 +68,13 @@ export const VisionAnalysisTool = buildTool({
     async checkPermissions(_input) {
         return {
             behavior: 'allow',
-            decisionReason: { type: 'other', reason: 'Image analysis via NVIDIA vision API' },
+            decisionReason: { type: 'other', reason: 'Image analysis via native vision' },
         };
     },
     async prompt() {
         return `## Vision Analysis Tool
 
-Analyze images using Kimi-K2.5 vision model via NVIDIA NIM API.
-
-**Environment Required:**
-- NVIDIA_API_KEY - API key for vision API
+Analyze images using native vision capabilities.
 
 **Features:**
 - Detailed image description and analysis
@@ -136,10 +99,7 @@ Analyze images using Kimi-K2.5 vision model via NVIDIA NIM API.
 - prompt: Optional specific question or focus (default: "Describe this image in detail")
 
 **Output:**
-Returns a detailed description of the image content.
-
-**Model:**
-Uses Moonshot AI's Kimi-K2.5 vision model through NVIDIA's API for high-quality image understanding.`;
+Returns a detailed description of the image content.`;
     },
     async validateInput(input) {
         if (!input.image_path) {
@@ -149,6 +109,7 @@ Uses Moonshot AI's Kimi-K2.5 vision model through NVIDIA's API for high-quality 
                 errorCode: 1,
             };
         }
+
         if (!existsSync(input.image_path)) {
             return {
                 result: false,
@@ -156,7 +117,7 @@ Uses Moonshot AI's Kimi-K2.5 vision model through NVIDIA's API for high-quality 
                 errorCode: 2,
             };
         }
-        // Check file extension
+
         const validExtensions = ['.png', '.jpg', '.jpeg', '.webp'];
         const hasValidExt = validExtensions.some(ext => input.image_path.toLowerCase().endsWith(ext));
         if (!hasValidExt) {
@@ -166,27 +127,47 @@ Uses Moonshot AI's Kimi-K2.5 vision model through NVIDIA's API for high-quality 
                 errorCode: 3,
             };
         }
-        if (!getNvidiaApiKey()) {
-            return {
-                result: false,
-                message: 'NVIDIA_API_KEY environment variable not set',
-                errorCode: 4,
-            };
-        }
+
         return { result: true };
     },
     async call(input, context) {
         const { image_path, prompt = 'Describe this image in detail' } = input;
+
         try {
-            const description = await analyzeImage(image_path, prompt);
+            console.error(`[VisionAnalysisTool] Reading image: ${image_path}`);
+            const image = await loadImageForAnalysis(image_path);
+            console.error(`[VisionAnalysisTool] Image loaded: ${image.mediaType}, base64 length: ${image.base64.length}`);
+
+            const imageBlock = {
+                type: 'image',
+                source: {
+                    type: 'base64',
+                    media_type: image.mediaType,
+                    data: image.base64,
+                },
+            };
+
+            const textBlock = { type: 'text', text: prompt };
+
+            console.error(`[VisionAnalysisTool] Creating newMessages with image block`);
+            const newMessage = createUserMessage({
+                content: [imageBlock, textBlock],
+                isMeta: true,
+            });
+            console.error(`[VisionAnalysisTool] newMessage created`);
+
             const output = {
-                description,
-                model: LLM_MODEL,
+                description: `Image loaded for analysis. User asked: "${prompt}"`,
                 prompt,
             };
-            return { data: output };
-        }
-        catch (error) {
+
+            console.error(`[VisionAnalysisTool] Returning result`);
+            return {
+                data: output,
+                newMessages: [newMessage],
+            };
+        } catch (error) {
+            console.error(`[VisionAnalysisTool] Error: ${error}`);
             logError(error instanceof Error ? error : new Error(String(error)));
             throw error;
         }
@@ -195,10 +176,10 @@ Uses Moonshot AI's Kimi-K2.5 vision model through NVIDIA's API for high-quality 
         const content = `Image analysis complete!
 
 **Prompt:** ${result.prompt}
-**Model:** ${result.model}
 
 **Description:**
 ${result.description}`;
+
         return {
             tool_use_id: toolUseID,
             type: 'tool_result',
