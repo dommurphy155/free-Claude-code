@@ -261,6 +261,28 @@ async def stream_upstream(
     api_url          = f"{KEYMASTER_URL}/v1/chat/completions"
     headers          = {"Content-Type": "application/json"}
 
+    # Wait for keymaster to be reachable before yielding anything to Claude Code
+    KEYMASTER_RETRY_ATTEMPTS = 10
+    KEYMASTER_RETRY_WAIT     = 3  # seconds between polls
+
+    for attempt in range(KEYMASTER_RETRY_ATTEMPTS):
+        try:
+            await http_client.get(f"{KEYMASTER_URL}/health", timeout=3.0)
+            break  # reachable, proceed
+        except (httpx.ConnectError, httpx.TimeoutException):
+            if attempt == KEYMASTER_RETRY_ATTEMPTS - 1:
+                # Gave up — yield error stream
+                yield f"event: message_start\ndata: {json.dumps({'type': 'message_start', 'message': {'id': f'msg_{uuid.uuid4().hex[:12]}', 'type': 'message', 'role': 'assistant', 'content': [], 'model': anthropic_model, 'usage': {'input_tokens': 0, 'output_tokens': 0}}})}\n\n"
+                yield f"event: content_block_start\ndata: {json.dumps({'type': 'content_block_start', 'index': 0, 'content_block': {'type': 'text', 'text': ''}})}\n\n"
+                yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'text_delta', 'text': '[Bridge error: Keymaster unreachable after retries]'}})}\n\n"
+                yield f"event: content_block_stop\ndata: {json.dumps({'type': 'content_block_stop', 'index': 0})}\n\n"
+                yield f"event: message_delta\ndata: {json.dumps({'type': 'message_delta', 'delta': {'stop_reason': 'error'}, 'usage': {'input_tokens': 0, 'output_tokens': 0}})}\n\n"
+                yield f"event: message_stop\ndata: {json.dumps({'type': 'message_stop'})}\n\n"
+                return
+            print(f"[BRIDGE:{request_id}] Keymaster down, waiting {KEYMASTER_RETRY_WAIT}s (attempt {attempt + 1}/{KEYMASTER_RETRY_ATTEMPTS})", file=sys.stderr)
+            await asyncio.sleep(KEYMASTER_RETRY_WAIT)
+
+    # Keymaster is up — now start the stream
     yield f"event: message_start\ndata: {json.dumps({'type': 'message_start', 'message': {'id': f'msg_{uuid.uuid4().hex[:12]}', 'type': 'message', 'role': 'assistant', 'content': [], 'model': anthropic_model, 'usage': {'input_tokens': 0, 'output_tokens': 0}}})}\n\n"
     yield f"event: content_block_start\ndata: {json.dumps({'type': 'content_block_start', 'index': 0, 'content_block': {'type': 'text', 'text': ''}})}\n\n"
 
@@ -291,7 +313,6 @@ async def stream_upstream(
                         choice = chunk.get("choices", [{}])[0]
                         delta  = choice.get("delta") or {}
 
-                        # Strict string check - don't swallow content: 0 or content: False
                         text = delta.get("content")
                         if isinstance(text, str) and text:
                             yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'text_delta', 'text': text}})}\n\n"
